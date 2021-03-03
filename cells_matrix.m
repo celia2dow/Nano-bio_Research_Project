@@ -1,4 +1,4 @@
-function cells_matrix2(total_t, N_initial, P_m, P_p, DIM, speed)
+function cells_matrix(total_t, N_initial, P_m, P_p, DIM, speed)
 % cells_matrix simulates the random proliferation and movement of cells in
 % a 2.D cell monolayer within a culture dish.
 %
