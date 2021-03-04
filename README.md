@@ -1,3 +1,4 @@
-# Nano-bio_Research_Project
+# Nano-bio Research Project
+## Celia Dowling 2021
 
 This placement will involve working on a project within the mathematical biology field titled “Stochastic models of nanoparticle-cell binding and internalisation” under the supervision of DECRA Research Fellow Dr Stuart Johnston in the School of Mathematics and Statistics at the University of Melbourne. Nanoparticles are a promising method for the targeted delivery of therapeutics, and thus modelling their interactions with cells has direct utility in industry research areas such as drug dosage and discovery and medical imaging. This project seeks to address shortfalls in quantitative interpretations of nano-bio experimental data in order to assist future endeavours in this area. It will employ an agent based model that incorporates cell movement and proliferation, cell-particle interactions and internalisation of particles.
