@@ -16,7 +16,14 @@ function evolution_info = cells_simulation(total_t, N_initial, P_m, ...
 %       DIM         lattice dimensions (DIM by DIM)
 %       speed       speed of movie frame playback (how many frames per sec)
 %
-%   This is the work of Celia Dowling 3/3/21
+%   The output arguments are:
+%       
+%       evolution_info  a structure containing:
+%           cell_population     a record of the cell population over time
+%           cell_lineage        a record of cell lineage 
+%                               [parent cell, daughter cell, generation]
+%
+%   This is the work of Celia Dowling 8/3/21
 
 close all;
 
@@ -27,7 +34,7 @@ rng(22)
 t=0;
 N_t = N_initial;
 cell_pop = [N_initial zeros(1,total_t)];
-cell_lin = zeros(total_t,2);
+cell_lin = zeros(total_t,3);
 
 % Randomise position of cells on lattice
 culture_dish = zeros(DIM);
@@ -120,9 +127,17 @@ while t < total_t && all(culture_dish, 'all') == 0
                 N_t = N_t + 1;
                 cell_sites(N_t) = daughter_site;
                 
-                % Add the [parent cell #, daughter cell #] to track lineage
-                cell_lin(N_t - N_initial,:) = [find(cell_sites == ...
-                    parent_site), N_t];
+                % Add the [parent cell #, daughter cell #, generation #] to
+                % track lineage
+                parent_cell_num = find(cell_sites == parent_site);
+                parent_not_gen_1 = (cell_lin(:,2) == parent_cell_num);
+                if any(parent_not_gen_1)
+                    gen_num = cell_lin(parent_not_gen_1, 3) + 1;
+                else
+                    gen_num = 2;
+                end
+                cell_lin(N_t - N_initial,:) = [parent_cell_num, N_t, ...
+                    gen_num];
             end
         end        
     end
