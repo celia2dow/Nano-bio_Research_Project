@@ -20,8 +20,9 @@ function evolution_info = cells_simulation(total_t, N_initial, P_m, ...
 %       
 %       evolution_info  a structure containing:
 %           cell_population     a record of the cell population over time
-%           cell_lineage        a record of cell lineage 
-%                               [parent cell, daughter cell, generation]
+%           cell_lineage        a record of cell lineage with each row
+%                               being a complete lineage line to a new,
+%                               unproliferating cell
 %
 %   This is the work of Celia Dowling 8/3/21
 
@@ -34,7 +35,9 @@ rng(22)
 t=0;
 N_t = N_initial;
 cell_pop = [N_initial zeros(1,total_t)];
-cell_lin = zeros(total_t,3);
+cell_lin = zeros(total_t,total_t);
+new_lin = 1; % keeping track of the newest lineage number
+lin_record = 0; % keeping track of the longest lineage line
 
 % Randomise position of cells on lattice
 culture_dish = zeros(DIM);
@@ -127,17 +130,29 @@ while t < total_t && all(culture_dish, 'all') == 0
                 N_t = N_t + 1;
                 cell_sites(N_t) = daughter_site;
                 
-                % Add the [parent cell #, daughter cell #, generation #] to
-                % track lineage
+                % Add the cell linage
                 parent_cell_num = find(cell_sites == parent_site);
-                parent_not_gen_1 = (cell_lin(:,2) == parent_cell_num);
-                if any(parent_not_gen_1)
-                    gen_num = cell_lin(parent_not_gen_1, 3) + 1;
-                else
-                    gen_num = 2;
-                end
-                cell_lin(N_t - N_initial,:) = [parent_cell_num, N_t, ...
-                    gen_num];
+                if any(any(cell_lin(:,2:end) == parent_cell_num))
+                    % If parent cell is not gen 1, find the preexisting 
+                    % lineages involving the parent cell.
+                    [rows, cols] = find(cell_lin == parent_cell_num);
+                    if cell_lin(rows(1), cols(1)+1) == 0
+                        % If parent cell has not yet proliferated, add 
+                        % daughter cell onto the end of the existing 
+                        % lineage row
+                        cell_lin(rows, cols+1) = N_t;
+                    else % If parent cell has proliferated, create new 
+                        % lineage line for the daughter cell
+                        cell_lin(new_lin, 1:cols(1)+1) = ...
+                            [cell_lin(rows(1), 1:cols(1)), N_t];
+                        new_lin = new_lin + 1;
+                    end
+                    lin_record = max(lin_record, cols(1)+1);
+                else % If parent cell is gen 1, create new lineage line
+                    cell_lin(new_lin,1:2) = [parent_cell_num, N_t];
+                    new_lin = new_lin + 1;
+                    lin_record = max(lin_record, 2);
+                end      
             end
         end        
     end
@@ -161,5 +176,5 @@ movie(cell_movie, 1, speed);
 
 % Save evolution information into a structure
 evolution_info = struct('cell_population', cell_pop(1:t+1), ...
-    'cell_lineage', cell_lin(1:(N_t-N_initial),:));
+    'cell_lineage', cell_lin(1:(new_lin - 1), 1:lin_record));
 end
