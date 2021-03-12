@@ -1,5 +1,6 @@
 function cells_simulation_driver()
-% cells_simulation_driver drives the cells_simulation simulation with the 
+
+% cells_simulation_driver drives the cells_simulation simulation with the
 % specified parameters.
 
 total_t = 62;   % total number of time steps
