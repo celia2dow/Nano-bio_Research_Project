@@ -63,33 +63,48 @@ while t < total_t && all(culture_dish, 'all') == 0
     
     % N_t agents are selected with replacement, at random, one at a time
     % and are given a chance to move
-    for choice = 1:N_t
-        selected_to_move = datasample(cell_sites(1:N_t),1);
-        if rand <= P_m  % only a portion of those selected will try to move
-            
-            % Convert linear indices to [row,column] coordinates 
-            current_site = selected_to_move;   
-            [current_row, current_col] = ind2sub(DIM, current_site);
+    selected_to_move = datasample(cell_sites(1:N_t), N_t);
+    which_try_to_move = selected_to_move(rand(N_t,1) <= P_m);
+    attempt_directions = datasample(1:4, length(which_try_to_move));
+    
+    for i = 1:length(which_try_to_move)
+        % Convert linear indices to [row,column] coordinates 
+        current_site = which_try_to_move(i);
+        [current_row, current_col] = ind2sub(DIM, current_site);
         
-            % Each selected agent chooses a random direction to move in 
-            % (up, down, left, right)
-            delta = randsample([randsample([-1,1],1),0],2);
-            new_row_col = [current_row, current_col] + delta;
-            
-            % For every cell that pops out of the lattice on one side, 
-            % another cell pops into the lattice on the opposite side
-            new_row_col(new_row_col > DIM) = 1;
-            new_row_col(new_row_col < 1) = DIM; 
+        % Each selected agent chooses a random direction to move in (up,
+        % down, left, right)
+        direction = attempt_directions(i);
+        switch direction
+            case 1 % try to move up
+                new_col = current_col;
+                new_row = current_row - 1;
+            case 2 % try to move right
+                new_row = current_row;
+                new_col = current_col + 1;
+            case 3 % try to move down
+                new_col = current_col;
+                new_row = current_row + 1;
+            case 4 % try to move left
+                new_row = current_row;
+                new_col = current_col - 1;
+        end    
+        new_row_col = [new_row, new_col];
+                      
+        % For every cell that pops out of the lattice on one side, 
+        % another cell pops into the lattice on the opposite side
+        new_row_col(new_row_col > DIM) = 1;
+        new_row_col(new_row_col < 1) = DIM; 
         
-            % Convert [row,column] coordinates to linear indices
-            new_site = sub2ind([DIM,DIM], new_row_col(1), new_row_col(2));
+        % Convert [row,column] coordinates to linear indices
+        new_site = sub2ind([DIM,DIM], new_row_col(1), new_row_col(2));
         
-            % If the new site is vacant, the cell moves
-            if culture_dish(new_site) == 0
-              culture_dish(current_site) = 0;
-              culture_dish(new_site) = 1;
-              cell_sites(cell_sites == current_site) = new_site;
-            end
+        % If the new site is vacant, the cell moves
+        if culture_dish(new_site) == 0
+            culture_dish(current_site) = 0;
+            culture_dish(new_site) = 1;
+            cell_sites(cell_sites == current_site) = new_site;
+            which_try_to_move(which_try_to_move == current_site) = new_site;
         end
     end
 
