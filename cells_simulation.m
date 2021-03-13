@@ -72,7 +72,7 @@ cell_fig.Visible = 'off';
 c = [cell_phases(1:N_t)'/K zeros(N_t,2)]; % colours for phases
 scatter(cols(1:N_t), DIM - rows(1:N_t) + 1, 10*cell_phases(1:N_t), c, ...
     'filled'); % Ensuring the graph represents the lattice positioning
-%xlim([0.5 DIM+0.5]); ylim([0.5 DIM+0.5]);
+xlim([0.5 DIM+0.5]); ylim([0.5 DIM+0.5]);
 title(sprintf('timestep = %d',t));
 drawnow
 cell_movie(t+1) = getframe(cell_fig);
@@ -115,10 +115,11 @@ while t < total_t && all(culture_dish, 'all') == 0
         end
     end
 
-    %%% PROLIFERATION %%%
+    %%% CELL CYCLE & PROLIFERATION %%%
     
     % N_t agents are selected with replacement, at random, one at a time
-    % and are given a chance to proliferate
+    % and are given a chance to transition to the next phase in the cell 
+    % cycle and perhaps proliferate
     for choice = 1:N_t
         parent_site = datasample(cell_sites(1:N_t),1);
         old_phase = cell_phases(cell_sites == parent_site);
@@ -145,6 +146,7 @@ while t < total_t && all(culture_dish, 'all') == 0
                     daughter_row_col(2));
         
                 % If the new site is vacant, the cell proliferates in it
+                % and returns to the first phase of the cell cycle as well
                 if culture_dish(daughter_site) == 0
                     culture_dish(daughter_site) = 1;
                     N_t = N_t + 1;
@@ -186,7 +188,7 @@ while t < total_t && all(culture_dish, 'all') == 0
     c = [cell_phases(1:N_t)'/K zeros(N_t,2)]; % colours for phases
     scatter(cols(1:N_t), DIM - rows(1:N_t) + 1, 10*cell_phases(1:N_t), ...
         c, 'filled'); % Ensuring the graph represents the lattice positioning
-    %xlim([0.5 DIM+0.5]); ylim([0.5 DIM+0.5]);
+    xlim([0.5 DIM+0.5]); ylim([0.5 DIM+0.5]);
     title(sprintf('timestep = %d',t));
     drawnow
     cell_movie(t+1) = getframe(cell_fig);
