@@ -13,9 +13,9 @@ function evolution_info = cells_simulation(total_t, N_initial, P_m, ...
 %       N_initial   initial number of agents (cells) in the lattice
 %       P_m         ability of an agent (cell) to move during each timestep
 %       cycle_probs a list of K probabilities of transitioning between
-%                   stages in the cell cycle (e.g. stage 1 to stage 2, 
-%                   stage 2 to stage 3, ..., stage N-1 to stage N, stage N
-%                   to stage 1 having proliferated)
+%                   phases in the cell cycle (e.g. phase 1 to phase 2, 
+%                   phase 2 to phase 3, ..., phase N-1 to phase N, phase N
+%                   to phase 1 having proliferated)
 %       DIM         lattice dimensions (DIM by DIM)
 %       speed       speed of movie frame playback (how many frames per sec)
 %
