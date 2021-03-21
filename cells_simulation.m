@@ -38,7 +38,9 @@ t=0;
 N_t = N_initial; % the number of cells at timestep t
 K = length(cycle_probs); % the number of phases in the cell cycle
 cell_pop = [N_t zeros(1,total_t)]; % array for cell_population field
-cell_lin = zeros(total_t,3); % array for cell_lineage field
+% array for cell_lineage field including N_initial generation 1 cells
+cell_init = 1:N_t;
+cell_lin = [zeros(N_t,1) cell_init' ones(N_t,1); zeros(total_t,3)]; 
 
 % Randomise position of cells on lattice and their phases
 culture_dish = zeros(DIM);
@@ -164,7 +166,7 @@ while t < total_t && all(culture_dish, 'all') == 0
                     else
                         gen_num = 2;
                     end
-                    cell_lin(N_t - N_initial,:) = [parent_cell_num, N_t, ...
+                    cell_lin(N_t,:) = [parent_cell_num, N_t, ...
                         gen_num];
                 else
                     new_phase = K;
