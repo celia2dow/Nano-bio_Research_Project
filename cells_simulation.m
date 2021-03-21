@@ -120,7 +120,8 @@ while t < total_t && all(culture_dish, 'all') == 0
     % N_t agents are selected with replacement, at random, one at a time
     % and are given a chance to transition to the next phase in the cell 
     % cycle and perhaps proliferate
-    for choice = 1:N_t
+    N_t_static = N_t; % keep N_t fixed for the attempted prolif. events
+    for choice = 1:N_t_static
         parent_site = datasample(cell_sites(1:N_t),1);
         old_phase = cell_phases(cell_sites == parent_site);
         
