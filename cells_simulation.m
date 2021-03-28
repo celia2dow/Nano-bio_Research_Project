@@ -122,18 +122,26 @@ while t < total_t && all(culture_dish, 'all') == 0
         % weighted distribution.
         attempts = datasample(hovering_prtcls, x);
         
-        % Run a Bernoulli trial for each particle using the dynamic
-        % transition probability to see whether or not it succeeds in its
-        % attempt.        
-        dynamic_prtcl_probs = base_prtcl_probs(attempts) .* ...
-            (1 - num_internal/max_prtcl);
+        % Run a Bernoulli trial for each particle one at a time using the 
+        % dynamic transition probability to see whether or not it succeeds 
+        % in its attempt.
         Bernoulli_trials = rand(1,x);
-        successes = attempts(Bernoulli_trials <= dynamic_prtcl_probs);
+        successes = zeros(1,x);
+        for prtcl = 1:x
+            stage = attempts(prtcl);
+            dynamic_prtcl_prob =  base_prtcl_probs(stage) * ...
+                (1-num_internal/max_prtcl);
+            successes(prtcl) = stage * (Bernoulli_trials(prtcl) ...
+                <= dynamic_prtcl_prob);
+            if stage == L && successes(prtcl) ~=0
+                num_internal = num_internal + 1;
+            end
+        end
         
         % Update the total number of particles in each stage of the
         % cell-particle interaction model
         for stage = 1:L
-            success_in_stage = sum(successes(successes == stage));
+            success_in_stage = sum(successes == stage);
             prtcls_per_stage(stage) = prtcls_per_stage(stage) - success_in_stage;
             prtcls_per_stage(stage + 1) = prtcls_per_stage(stage + 1) ...
                 + success_in_stage;
@@ -222,6 +230,9 @@ while t < total_t && all(culture_dish, 'all') == 0
     population(t+1) = N_t;
     free_prtcls(t+1) = prtcls_initial - sum(cell_prtcls(:,L+1));
 end
+
+% Print cell particles
+disp(cell_prtcls((1:N_t),:));
 
 % Play movie
 petri_fig.Visible = 'on';
