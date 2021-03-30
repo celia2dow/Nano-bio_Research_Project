@@ -5,7 +5,9 @@ function cells_simulation_driver()
 %   This is the work of Celia Dowling 22/3/21
 
 total_t = 100;   % total number of time steps
-N_initial = 6; % initial number of agents (cells) in the lattice
+N_initial = 6; % initial number of agents (cells) in the lattice. At this 
+                % point, this program only works for when N_initial * 100 >
+                % DIM * DIM
 DIM = 100;       % lattice dimensions (DIM by DIM)
 max_prtcl = 30; % the maximum number of particles a cell can internalise
 P_m = 0.9;      % probability that an agent (cell) moves in 1 timestep
@@ -16,9 +18,9 @@ cycle_probs = [0.1, 0.1, 0.1, 0.1, 0.1];
                 % N-1 to phase N, phase N to phase 1 having proliferated)
                 %    note that these probabilities are discrete 
                 %    approximates of the exponential waiting time rates
-rate_interacts = 30;    % the poisson rate at which particles interact with
-                        % a given cell (number of particles per timestep)
-base_prtcl_probs = 0.5;  
+rate_interacts = 0.3;    % the poisson rate at which particles interact with
+                        % a given cell
+base_prtcl_probs = [0.2,0.2,0.2];  
                 % a list of L base probabilities of particles transitioning
                 % between stages of the cell-particle interaction model in 
                 % 1 timestep
@@ -32,6 +34,6 @@ fprintf("\nCell population per time step: \n");
 disp(evolution_info.cell_population)
 fprintf("\nCell lineage [parent cell, daughter cell, generation number]: \n");
 disp(evolution_info.cell_lineage)
-fprintf("\nNumber of particles that haven't been internalised per time step: \n");
-disp(evolution_info.uninternalised_particles)
+fprintf("\nNumber of particles that haven't been interacted with per time step: \n");
+disp(evolution_info.free_particles)
 end
