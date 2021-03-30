@@ -34,9 +34,9 @@ function evolution_info = cells_simulation(total_t, N_initial, DIM, ...
 %           cell_population     a record of the cell population over time
 %           cell_lineage        a record of cell lineage 
 %                               [parent cell, daughter cell, generation]
-%           uninternalised_particles    a record of the number of particles
-%                                       that have not been internalised 
-%                                       over time
+%           free_particles      a record of the number of particles that
+%                               have not been internalised by or bound to 
+%                               cells over time
 %
 %   This is the work of Celia Dowling 22/3/21
 
@@ -59,7 +59,7 @@ total_sites = DIM * DIM; % total number of possible positions in petri dish
 % Initialise arrays for evolution_info fields
 population = [N_t zeros(1,total_t)]; % cell_population
 lineage = [zeros(N_t,1) (1:N_t)' ones(N_t,1); zeros(total_t,3)]; % cell_lineage
-free_prtcls = [prtcls_initial zeros(1, total_t)]; % uninternalised_particles
+free_prtcls = [prtcls_initial zeros(1, total_t)]; % free_particles
 
 % Randomise the positions of initial cells on a DIM by DIM lattice. From 
 % now on, all arrays with the name suffix 'cell_' correspond in indexing 
@@ -75,7 +75,8 @@ cell_phases(1:N_t) = datasample(1:K, N_t);
 % Initialise arrays recording the number of particles in different stages
 % (per column) of interaction with each cell (per row). The first column is
 % to simulate the number of particles hovering around one cell initially.
-cell_prtcls = [100*ones(total_sites, 1) zeros(total_sites, L)];
+cell_prtcls = [(prtcls_initial/total_sites)*ones(total_sites, 1) ...
+    zeros(total_sites, L)];
 
 % Prepare movie
 petri_fig = figure;
@@ -95,58 +96,89 @@ while t < total_t && all(culture_dish, 'all') == 0
     
     %%% CELL-PARTICLE INTERACTIONS %%%
     
+    % Assuming that particles are constantly evenly dispersing themselves  
+    % around the petri dish/matrix, then the number of particles hovering  
+    % over a matrix site at the beginning of each timestep (prtcls_hover) 
+    % will be the total number of particles that are not internalised or 
+    % currently bound to/interacting with cells divided amongst the number 
+    % of matrix sites. num_per_site is an average and therefore may be a
+    % decimal number - that's ok.
+    free_prtcls(t+1) = free_prtcls(t);
+    num_per_site = free_prtcls(t+1)/total_sites;
+    
+    %if free_partcls(t) == 0
+    %    cell_prtcls(:,1) = 0;
+    %elseif free_prtcls(t) < total_sites
+    %    indices = randsample([ones(1,free_prtcls(t)) ...
+    %        zeros(1,total_sites - free_prtcls(t))], N_t);
+    %    cell_prtcls(indices,1) = 1;
+    %elseif free_prtcls(t) == total_sites
+    %    cell_prtcls(1:N_t,1)=1;
+    %else
+    cell_prtcls(:,1) = num_per_site;
+    %end
+    
+    % Given that one cell can interact with any of the particles hovering
+    % over their matrix site OR any of the particles already bound to/
+    % interacting with the cell, the total number of particles available to
+    % a cell for interaction is the sum of these two types. Again, this may
+    % be a decimal and that is ok.
+    num_available = sum(cell_prtcls(1:N_t,1:L),2);
+    
     % Allow each cell to attempt to interact with x particles where x is
-    % drawn from a Poisson distribution of rate (mean) equal to
-    % rate_interacts.
-    cell_num_attempts = poissrnd(rate_interacts, [1,N_t]);
-    for cell = 1: N_t
-        x = cell_num_attempts(cell);
-        prtcls_per_stage = cell_prtcls(cell,:);
-        
-        % Assuming about 100 particles are available to a cell at once, and
-        % given so many may already be in different stages of the
-        % cell-particle interaction model, create a weighted distribution 
-        % of the cell-particle interaction model stages.
-        num_internal = prtcls_per_stage(L+1);
-        hovering_prtcls = zeros(1, 100-num_internal);
-        num_previous_stage = 0;
-        for stage = 1:L
-            num_in_stage = prtcls_per_stage(stage);
-            hovering_prtcls(num_previous_stage + 1: num_in_stage + ...
-                num_previous_stage) = stage .* ones(1, num_in_stage);
-            num_previous_stage = num_in_stage;
-        end
-        
-        % Choose the current stages of the x particles which attempt to 
-        % progress through the cell-particle interaction model from this 
-        % weighted distribution.
-        attempts = datasample(hovering_prtcls, x);
-        
-        % Run a Bernoulli trial for each particle one at a time using the 
-        % dynamic transition probability to see whether or not it succeeds 
-        % in its attempt.
-        Bernoulli_trials = rand(1,x);
-        successes = zeros(1,x);
-        for prtcl = 1:x
-            stage = attempts(prtcl);
-            dynamic_prtcl_prob =  base_prtcl_probs(stage) * ...
-                (1-num_internal/max_prtcl);
-            successes(prtcl) = stage * (Bernoulli_trials(prtcl) ...
-                <= dynamic_prtcl_prob);
-            if stage == L && successes(prtcl) ~=0
-                num_internal = num_internal + 1;
+    % drawn from a Poisson distribution with a parameter proportionate to
+    % the number of particles available for interaction per cell
+    %       lambda = rate_interacts * prtcls_avail
+    % x will be a whole number in spite of the rate lambda perhaps being a
+    % decimal
+    cell_num_attempts = poissrnd(rate_interacts .* num_available);
+    non_zero_attempts = find(cell_num_attempts > 0);
+    if non_zero_attempts
+        for index = 1:length(non_zero_attempts)
+            cell = non_zero_attempts(index);
+            % Select x particles from the distribution of particles currently 
+            % bound to or hovering over the cell and record their stages.
+            x = cell_num_attempts(cell);
+            prtcls_per_stage = cell_prtcls(cell,:);
+            attempts = randsample(1:max(1,ceil(num_available(cell))), x); % round up
+            prev_index = 0;
+            for stage = 1:L
+                num_in_stage = ceil(prtcls_per_stage(stage)); % round up
+                attempts(attempts > prev_index + 1 & ...
+                    attempts < prev_index + num_in_stage) = stage; 
+                prev_index = prev_index + num_in_stage;
             end
+
+            % Run a Bernoulli trial for each particle and one at a time, 
+            % compare to the dynamic transition probability to see whether or 
+            % not it succeeds in its attempt.
+            num_internalised = prtcls_per_stage(L+1);
+            Bernoulli_trials = rand(1,x);
+            successes = zeros(1,x);
+            for prtcl = 1:x
+                stage = attempts(prtcl);
+                dynamic_prtcl_prob =  base_prtcl_probs(stage) * ...
+                    (1-num_internalised/max_prtcl);
+                successes(prtcl) = stage * (Bernoulli_trials(prtcl) ...
+                    <= dynamic_prtcl_prob);
+                if stage == L && successes(prtcl) ~=0
+                    num_internalised = num_internalised + 1;
+                end
+            end
+
+            % Update the total number of particles in each stage of the
+            % cell-particle interaction model
+            for stage = 1:L
+                success_in_stage = sum(successes == stage);
+                if stage == 1
+                    free_prtcls(t+1) = free_prtcls(t+1) - success_in_stage;
+                end
+                prtcls_per_stage(stage) = prtcls_per_stage(stage) - success_in_stage;
+                prtcls_per_stage(stage + 1) = prtcls_per_stage(stage + 1) ...
+                    + success_in_stage;
+            end
+            cell_prtcls(cell,:) = prtcls_per_stage;
         end
-        
-        % Update the total number of particles in each stage of the
-        % cell-particle interaction model
-        for stage = 1:L
-            success_in_stage = sum(successes == stage);
-            prtcls_per_stage(stage) = prtcls_per_stage(stage) - success_in_stage;
-            prtcls_per_stage(stage + 1) = prtcls_per_stage(stage + 1) ...
-                + success_in_stage;
-        end
-        cell_prtcls(cell,:) = prtcls_per_stage;
     end
     
     %%% MOVEMENT %%%
@@ -226,9 +258,8 @@ while t < total_t && all(culture_dish, 'all') == 0
     draw_frame(N_t, DIM, t, K, cell_sites, cell_phases)
     petri_movie(t+1) = getframe(petri_fig);
     
-    % Record the cell population and free particles at each timestep
+    % Record the cell population at each timestep
     population(t+1) = N_t;
-    free_prtcls(t+1) = prtcls_initial - sum(cell_prtcls(:,L+1));
 end
 
 % Print cell particles
@@ -241,7 +272,7 @@ movie(petri_fig, petri_movie, 1, speed);
 % Save evolution information into a structure
 evolution_info = struct('cell_population', population(1:t+1), ...
     'cell_lineage', lineage(1:N_t,:), ...
-    'uninternalised_particles', free_prtcls(1:t+1));
+    'free_particles', free_prtcls(1:t+1));
 end
 
 
