@@ -363,20 +363,18 @@ col_cell = [1 0 0];
 siz_cell = 10*cell_phases; 
 % Transparency of cell colour depends on number of internalised particles
 transp_cell = cell_prtcls(:,end)/max_prtcl;
-% Width of edge of cell depends on number of interacting particles
-wid_edge = 0.1 * sum(cell_prtcls(:,2:end - 1),2);
 for cell = 1:N_t
+    % Width of edge of cell depends on number of interacting particles
     if L == 1 || sum(cell_prtcls(cell,2:end - 1)) == 0
-        scatter(cols(cell), DIM - rows(cell) + 1, siz_cell(cell), ...
-        'MarkerFaceColor', col_cell, ...
-        'MarkerFaceAlpha', transp_cell(cell));
+        wid_edge = 0.1;
     else
-        % Plot point for cell ensuring the graph represents the lattice 
-        % positioning
-        scatter(cols(cell), DIM - rows(cell) + 1, siz_cell(cell), ...
-        'MarkerEdgeColor', col_edge, 'MarkerFaceColor', col_cell, ...
-        'MarkerFaceAlpha', transp_cell(cell), 'LineWidth', wid_edge(cell));
-    end    
+        wid_edge = 0.1 * sum(cell_prtcls(cell,2:end - 1),2);
+    end 
+    % Plot point for cell ensuring the graph represents the lattice 
+    % positioning
+    scatter(cols(cell), DIM - rows(cell) + 1, siz_cell(cell), ...
+    'MarkerEdgeColor', col_edge, 'MarkerFaceColor', col_cell, ...
+    'MarkerFaceAlpha', transp_cell(cell), 'LineWidth', wid_edge);
     hold on
 end
 xlim([0.5 DIM+0.5]); ylim([0.5 DIM+0.5]);
