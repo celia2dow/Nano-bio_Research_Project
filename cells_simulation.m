@@ -357,18 +357,19 @@ function draw_frame(N_t, DIM, t, L, max_prtcl, cell_sites, cell_phases, cell_prt
 %       opaqueness of cell colour indicating number of internalised particles
 %       width of cell outline indicating number of interacting particles
 [rows, cols] = ind2sub(DIM, cell_sites);
-col_edge = [0 0 1];
-col_cell = [1 0 0]; 
 % Sizes of cell depend on cell phase
 siz_cell = 10*cell_phases; 
+col_cell = [1 0 0];
 % Transparency of cell colour depends on number of internalised particles
 transp_cell = cell_prtcls(:,end)/max_prtcl;
 for cell = 1:N_t
     % Width of edge of cell depends on number of interacting particles
     if L == 1 || sum(cell_prtcls(cell,2:end - 1)) == 0
         wid_edge = 0.1;
+        col_edge = [0 1 0];
     else
         wid_edge = 0.1 * sum(cell_prtcls(cell,2:end - 1),2);
+        col_edge = [0 0 1];
     end 
     % Plot point for cell ensuring the graph represents the lattice 
     % positioning
