@@ -5,10 +5,10 @@ function cells_simulation_driver()
 %   This is the work of Celia Dowling 22/3/21
 
 total_t = 100;   % total number of time steps
-N_initial = 10; % initial number of agents (cells) in the lattice. At this 
+N_initial = 30; % initial number of agents (cells) in the lattice. At this 
                 % point, this program only works for when N_initial * 100 >
                 % DIM * DIM
-DIM = 10;       % lattice dimensions (DIM by DIM)
+DIM = 50;       % lattice dimensions (DIM by DIM)
 max_prtcl = 30; % the maximum number of particles a cell can internalise
 P_move = 0.9;   % probability that an agent (cell) moves in 1 timestep
 P_inherit = 0.5; % the probability of a daughter cell born into the site of
@@ -22,10 +22,11 @@ cycle_probs = [0.1, 0.1, 0.1, 0.1, 0.1];
                 %    approximates of the exponential waiting time rates
 rate_interacts = 0.3;    % the poisson rate at which particles interact with
                         % a given cell
-base_prtcl_probs = [0.2,0.2,0.2];  
+base_prtcl_probs = [0.2,0.2,0.2;0.1,0.1,0.1;0.3,0.3,0.3;0.05,0.05,0.05;0.2,0.2,0.2];  
                 % a list of L base probabilities of particles transitioning
                 % between stages of the cell-particle interaction model in 
-                % 1 timestep
+                % 1 timestep - can be 1 probability per transition or can
+                % be 1 probability per cell phase per transition
 speed = 2;      % speed of movie frame playback (how many frames per sec)
 
 evolution_info = cells_simulation(total_t, N_initial, DIM, max_prtcl, ...
