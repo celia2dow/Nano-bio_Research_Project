@@ -29,7 +29,9 @@ function evolution_info = cells_simulation(total_t, N_initial, DIM, ...
 %                       given cell (number of particles per timestep)
 %       base_prtcl_probs    a list of L base probabilities of particles 
 %                           transitioning between stages of the 
-%                           cell-particle interaction model in 1 timestep
+%                           cell-particle interaction model in 1 timestep -
+%                           can be 1 probability per transition or can be 1
+%                           probability per cell phase per transition
 %       speed       speed of movie frame playback (frames per sec)
 %
 %   The output arguments are:
@@ -59,7 +61,11 @@ t=0; % the timestep
 N_t = N_initial; % the number of cells at timestep t
 prtcls_initial = N_t * 100; % the number of particles initially
 K = length(cycle_probs); % the number of phases in the cell proliferation cycle
-L = length(base_prtcl_probs); % "" in the cell-particle interaction model
+[check,L] = size(base_prtcl_probs); % "" in the cell-particle interaction model
+swtch = 0;
+if check > 1
+    swtch = 1;
+end
 total_sites = DIM * DIM; % total number of possible positions in petri dish
 
 % Initialise arrays for evolution_info fields
@@ -159,8 +165,14 @@ while t < total_t && ~all(culture_dish, 'all')
             successes = zeros(1,x);
             for prtcl = 1:x
                 stage = attempts(prtcl);
-                dynamic_prtcl_prob =  base_prtcl_probs(stage) * ...
-                    (1-num_internalised/max_prtcl);
+                if swtch
+                    dynamic_prtcl_prob =  base_prtcl_probs(...
+                        cell_phases(cell), stage) * ...
+                        (1-num_internalised/max_prtcl);
+                else
+                    dynamic_prtcl_prob =  base_prtcl_probs(stage) * ...
+                        (1-num_internalised/max_prtcl);
+                end
                 successes(prtcl) = stage * (Bernoulli_trials(prtcl) ...
                     <= dynamic_prtcl_prob);
                 if stage == L && successes(prtcl) ~=0
