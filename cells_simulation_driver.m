@@ -45,6 +45,4 @@ fprintf("\nCell lineage [parent cell, daughter cell, generation number]: \n");
 disp(evolution_info.cell_lineage)
 fprintf("\nNumber of particles that are free, interacting and internalised per time step: \n");
 disp(evolution_info.class_of_particles)
-fprintf("\nNumber of times the min function has been used when deciding the number of particles a cell interacts with: \n");
-disp(evolution_info.min_functions_used)
 end

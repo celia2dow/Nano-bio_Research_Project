@@ -50,9 +50,6 @@ function evolution_info = cells_simulation(total_t, N_initial, DIM, ...
 %                               cells (i.e free particles), interacting
 %                               particles and internalised particles over
 %                               time
-%           count_mins  the number of times the min function was used in
-%                       drawing a number of particles to interact with
-%                       imperfectly from a Poisson distribution
 %
 %   This is the work of Celia Dowling 22/3/21
 
@@ -84,7 +81,6 @@ K = length(cycle_probs);
 % Initialise arrays/constants for evolution_info fields
 population = [N_t zeros(1,total_t)]; % cell_population
 lineage = [zeros(N_t,1) (1:N_t)' ones(N_t,1); zeros(total_t,3)]; % cell_lineage
-count_mins = 0; % number of times the min function has been used
 % Record free particles, interacting particles and internalised particles
 % per timestep in system
 tally_prtcls = [prtcls_initial zeros(1, total_t); zeros(2, total_t + 1)];
@@ -153,21 +149,17 @@ while t < total_t && ~all(tally_prtcls(:,t+1) == [0; ...
     num_available = sum(cell_prtcls(1:N_t,1:L),2);
     
     % Allow each cell to attempt to interact with x particles where x is
-    % drawn from a Poisson distribution with a parameter proportional to 
-    % the number of particles available for interaction per cell
-    %       lambda = rate_interacts * prtcls_avail
-    cell_num_attempts = poissrnd(rate_interacts .* num_available);
+    % drawn from a Binomial distribution where the probability of a successful
+    % event = rate_interacts and the number of trials = the number of particles
+    % available for interaction.
+    cell_num_attempts = binornd(num_available,rate_interacts);
     non_zero_attempts = find(cell_num_attempts > 0);
     if non_zero_attempts
         for index = 1:length(non_zero_attempts)
             cell = non_zero_attempts(index);
             % Select x particles from the distribution of particles currently 
             % bound to or hovering over the cell and record their stages.
-            %x = cell_num_attempts(cell); %This is sometimes > num_avail
-            x = min(num_available(cell),cell_num_attempts(cell));
-            if x == num_available(cell)
-                count_mins = count_mins + 1;
-            end
+            x = cell_num_attempts(cell);
             prtcls_per_stage = cell_prtcls(cell,:);
             attempts = randsample(1:num_available(cell), x);
             prev_index = 0;
@@ -358,8 +350,7 @@ end
 % Save evolution information into a structure
 evolution_info = struct('cell_population', population(1:t+1), ...
     'cell_lineage', lineage(1:N_t,:), ...
-    'class_of_particles', tally_prtcls(:,1:t+1), ...
-    'min_functions_used', count_mins);
+    'class_of_particles', tally_prtcls(:,1:t+1));
 end
 
 
