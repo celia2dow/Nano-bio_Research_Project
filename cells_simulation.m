@@ -149,9 +149,9 @@ while t < total_t && ~all(tally_prtcls(:,t+1) == [0; ...
     num_available = sum(cell_prtcls(1:N_t,1:L),2);
     
     % Allow each cell to attempt to interact with x particles where x is
-    % drawn from a Poisson distribution with a parameter proportional to 
-    % the number of particles available for interaction per cell
-    %       lambda = rate_interacts * prtcls_avail
+    % drawn from a Binomial distribution where the probability of a successful
+    % event = rate_interacts and the number of trials = the number of particles
+    % available for interaction.
     cell_num_attempts = binornd(num_available,rate_interacts);
     non_zero_attempts = find(cell_num_attempts > 0);
     if non_zero_attempts
@@ -159,7 +159,6 @@ while t < total_t && ~all(tally_prtcls(:,t+1) == [0; ...
             cell = non_zero_attempts(index);
             % Select x particles from the distribution of particles currently 
             % bound to or hovering over the cell and record their stages.
-            %x = cell_num_attempts(cell); %This is sometimes > num_avail
             x = cell_num_attempts(cell);
             prtcls_per_stage = cell_prtcls(cell,:);
             attempts = randsample(1:num_available(cell), x);
