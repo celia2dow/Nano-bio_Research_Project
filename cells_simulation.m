@@ -1,5 +1,5 @@
-function evolution_info = cells_simulation(total_t, N_initial, DIM, ...
-    siz_cell, max_prtcl, P_move, P_inherit, cycle_probs, ...
+function evolution_info = cells_simulation(total_tsteps, N_initial, ...
+    DIM, siz_cell, max_prtcl, P_move, P_inherit, cycle_probs, ...
     rate_interacts, base_prtcl_probs, speed, visual)
 % CELLS_SIMULATION simulates the random proliferation and movement of cells
 % in a 2.D cell monolayer within a culture dish.
@@ -10,7 +10,7 @@ function evolution_info = cells_simulation(total_t, N_initial, DIM, ...
 %
 %   The input arguments are:
 %
-%       total_t     total number of timesteps
+%       total_tsteps    total number of timesteps
 %       N_initial   initial number of cells in the lattice
 %       DIM         lattice dimensions (DIM by DIM)
 %       siz_cell    average diameter of particlular cell-type (micrometers)
@@ -45,11 +45,17 @@ function evolution_info = cells_simulation(total_t, N_initial, DIM, ...
 %           cell_population     a record of the cell population over time
 %           cell_lineage        a record of cell lineage 
 %                               [parent cell, daughter cell, generation]
+%           cell_phase_history  a record of the cell phases over time
 %           class_of_particles  a record of the number of particles that
 %                               have not been internalised by or bound to 
 %                               cells (i.e free particles), interacting
 %                               particles and internalised particles over
 %                               time
+%           average_c_o_p       a record of the average class of particles
+%                               over time
+%           cell_c_o_p          a 3D array recording the class of particles
+%                               on a cellular basis after a particular
+%                               amount of time (e.g 1 hour, half an hour)
 %
 %   This is the work of Celia Dowling 22/3/21
 
@@ -66,6 +72,7 @@ t = 0; % the timestep
 N_t = N_initial; % the number of cells at timestep t
 prtcls_initial = N_t * 100; % the number of particles initially
 total_sites = DIM * DIM; % total number of possible positions in petri dish
+tsteps_per_hour = floor(total_tsteps/24); % number of timesteps that 
 
 % Check how many stages in the cell-particle interactions model there are
 % and whether or not the user has defined different probabilities for
@@ -77,13 +84,6 @@ if check > 1
 end
 % The number of phases in the cell proliferation cycle
 K = length(cycle_probs); 
-
-% Initialise arrays/constants for evolution_info fields
-population = [N_t zeros(1,total_t)]; % cell_population
-lineage = [zeros(N_t,1) (1:N_t)' ones(N_t,1); zeros(total_t,3)]; % cell_lineage
-% Record free particles, interacting particles and internalised particles
-% per timestep in system
-tally_prtcls = [prtcls_initial zeros(1, total_t); zeros(2, total_t + 1)];
 
 % Randomise the positions of initial cells on a DIM by DIM lattice. From 
 % now on, all arrays with the name suffix 'cell_' correspond in indexing 
@@ -102,13 +102,23 @@ cell_phases(1:N_t) = datasample(1:K, N_t);
 % to simulate the number of particles hovering around one cell initially.
 cell_prtcls = zeros(total_sites, L+1);
 
+% Initialise arrays/constants for evolution_info fields
+population = [N_t zeros(1,total_tsteps)]; % cell_population
+lineage = [zeros(N_t,1) (1:N_t)' ones(N_t,1); zeros(total_tsteps,3)]; % cell_lineage
+cell_phase_history = [cell_phases' zeros(total_sites, total_tsteps)]; % cell_phase_history
+% Record free particles, interacting particles and internalised particles
+% per timestep in system (class_of_particles)
+tally_prtcls = [prtcls_initial zeros(1, total_tsteps); zeros(2, total_tsteps + 1)];
+% Record class of particles on a cell basis (cell_c_o_p) per hour
+cell_c_o_p_per_hour = zeros(total_sites,24+1,3);
+
 if visual
     % Prepare movie
     petri_fig = figure;
     axis tight manual % ensures getframe() returns a consistent size
     %ax = gca;
     %ax.NextPlot = 'replaceChildren';
-    petri_movie(total_t + 1) = struct('cdata',[],'colormap',[]);
+    petri_movie(total_tsteps + 1) = struct('cdata',[],'colormap',[]);
     petri_fig.Visible = 'off';
     
     % Save first movie frame (the initial culture dish)
@@ -117,8 +127,9 @@ if visual
     petri_movie(t+1) = getframe(petri_fig);
 end
 
-% Loop stops when timesteps are up or when culture dish is full
-while t < total_t && ~all(tally_prtcls(:,t+1) == [0; ...
+% Loop stops when timesteps are up or when culture dish is full of cells
+% with their maximum capacity of particles
+while t < total_tsteps && ~all(tally_prtcls(:,t+1) == [0; ...
         prtcls_initial-min(total_sites*max_prtcl,prtcls_initial); ...
         min(total_sites*max_prtcl,prtcls_initial)],'all')
     t = t+1;
@@ -178,7 +189,9 @@ while t < total_t && ~all(tally_prtcls(:,t+1) == [0; ...
             successes = zeros(1,x);
             for prtcl = 1:x
                 stage = attempts(prtcl);
-                if swtch
+                % If base probabilities have been defined per cell 
+                % proliferation cycle phase.
+                if swtch 
                     dynamic_prtcl_prob =  base_prtcl_probs(...
                         cell_phases(cell), stage) * ...
                         (1-num_internalised/max_prtcl);
@@ -193,24 +206,10 @@ while t < total_t && ~all(tally_prtcls(:,t+1) == [0; ...
                 end
             end
 
-            % Update the total number of particles in each stage of the
-            % cell-particle interaction model
+            % Update the total/per cell number of particles in each stage 
+            % of the cell-particle interaction model
             for stage = 1:L
                 success_in_stage = sum(successes == stage);
-                if stage == 1
-                    % Update total number of non-interacting and 
-                    % uninternalised (i.e free) particles in system
-                    tally_prtcls(1,t+1) = tally_prtcls(1,t+1) - success_in_stage;
-                    % Update total number of particles interacting with cells
-                    tally_prtcls(2,t+1) = tally_prtcls(2,t+1) + success_in_stage;
-                elseif stage == L
-                    % Update total number of particles interacting with
-                    % cells in system
-                    tally_prtcls(2,t+1) = tally_prtcls(2,t+1) - success_in_stage;
-                    % Update total number of internalised particles in
-                    % system
-                    tally_prtcls(3,t+1) = tally_prtcls(3,t+1) + success_in_stage;
-                end
                 prtcls_per_stage(stage) = prtcls_per_stage(stage) - ...
                     success_in_stage;
                 prtcls_per_stage(stage + 1) = prtcls_per_stage(stage ...
@@ -219,6 +218,11 @@ while t < total_t && ~all(tally_prtcls(:,t+1) == [0; ...
             cell_prtcls(cell,:) = prtcls_per_stage;
         end
     end
+    
+    % Update the total class of particles
+    tally_prtcls(2,t+1) = sum(cell_prtcls(1:N_t,2:L),'all'); % interacting
+    tally_prtcls(3,t+1) = sum(cell_prtcls(1:N_t,L+1)); % internalised
+    tally_prtcls(1,t+1) = prtcls_initial - sum(tally_prtcls(2:3,t+1)); % free
     
     %%% MOVEMENT %%%
     
@@ -334,8 +338,22 @@ while t < total_t && ~all(tally_prtcls(:,t+1) == [0; ...
         petri_movie(t+1) = getframe(petri_fig);
     end
     
+    % Record the class of particles on a cell basis every hour
+    if mod(t, tsteps_per_hour) == 0
+        cell_c_o_p_per_hour(1:N_t,t/tsteps_per_hour+1,1) = ...
+            cell_prtcls(1:N_t,1);
+        cell_c_o_p_per_hour(1:N_t,t/tsteps_per_hour+1,2) = ...
+            sum(cell_prtcls(1:N_t,1),2);
+        cell_c_o_p_per_hour(1:N_t,t/tsteps_per_hour+1,3) = ...
+            cell_prtcls(1:N_t,L+1);
+    end
+    
+    % Record the cell phases at each timestep
+    cell_phase_history(1:N_t,t+1) = cell_phases(1:N_t)';
+    
     % Record the cell population at each timestep
     population(t+1) = N_t;
+    
 end
 
 % Print cell particles
@@ -347,10 +365,19 @@ if visual
     movie(petri_fig, petri_movie, 1, speed);
 end
 
+% Calculate average class of particles per timestep (average_c_o_p)
+average_prtcls = zeros(3,t+1);
+for row = 1:3
+    average_prtcls(row,:) = tally_prtcls(row,1:t+1)./population(1:t+1);
+end
+
 % Save evolution information into a structure
 evolution_info = struct('cell_population', population(1:t+1), ...
     'cell_lineage', lineage(1:N_t,:), ...
-    'class_of_particles', tally_prtcls(:,1:t+1));
+    'cell_phase_history', cell_phase_history(1:N_t,1:t+1),...
+    'class_of_particles', tally_prtcls(:,1:t+1), ...
+    'average_c_o_p', average_prtcls(:,1:t+1), ...
+    'cell_c_o_p', cell_c_o_p_per_hour(1:N_t,:,:));
 end
 
 
