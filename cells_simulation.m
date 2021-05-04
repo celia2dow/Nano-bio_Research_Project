@@ -72,7 +72,7 @@ t = 0; % the timestep
 N_t = N_initial; % the number of cells at timestep t
 prtcls_initial = N_t * 100; % the number of particles initially
 total_sites = DIM * DIM; % total number of possible positions in petri dish
-tsteps_per_hour = floor(total_tsteps/24); % number of timesteps that 
+tsteps_per_hour = floor(total_tsteps/24); % number of timesteps per hour 
 
 % Check how many stages in the cell-particle interactions model there are
 % and whether or not the user has defined different probabilities for
