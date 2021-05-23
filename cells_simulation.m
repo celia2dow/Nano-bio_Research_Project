@@ -26,13 +26,16 @@ function evolution_info = cells_simulation(total_tsteps, N_initial, ...
 %                   proliferated)
 %                       note that these probabilities are discrete 
 %                       approximates of the exponential waiting time rates
-%       rate_interacts  the poisson rate at which particles interact with a
-%                       given cell (number of particles per timestep)
+%       rate_interacts  the binomial rate at which particles interact with 
+%                       a given cell, reflecting the dispersion of the 
+%                       particle type (number of particles per timestep)
 %       base_prtcl_probs    a list of L base probabilities of particles 
 %                           transitioning between stages of the 
 %                           cell-particle interaction model in 1 timestep -
 %                           can be 1 probability per transition or can be 1
-%                           probability per cell phase per transition
+%                           probability per cell phase per transition -
+%                           columns inicate interaction stage and rows 
+%                           indicate cell phase
 %       speed       speed of movie frame playback (frames per sec)
 %       visual      the form of visualisation desired which can be 0,1,2
 %                       0 = off
@@ -153,70 +156,51 @@ while t < total_tsteps && ~all(tally_prtcls(:,t+1) == [0; ...
         cell_prtcls(indices,1) = cell_prtcls(indices,1) + 1;
     end
     
-    % Given that one cell can interact with any of the particles hovering
-    % over their matrix site OR any of the particles already bound to/
-    % interacting with the cell, the total number of particles available to
-    % a cell for interaction is the sum of these two types.
-    num_available = sum(cell_prtcls(1:N_t,1:L),2);
+    % Given that rate_interacts is a measure of the dispersivity of a 
+    % particle type, we will begin by seeing if any hovering particles that 
+    % are currently "free" (so in the first column of our cell_prtcls 
+    % array) and are not interacting with a cell (not actually in stage 0 
+    % in which particles are interacting with but unbound to the cell) will 
+    % enter into an interaction with the cell (remain in the population of 
+    % cells in stage 0 of the cell-particle internalisation model).
     
-    % Allow each cell to attempt to interact with x particles where x is
-    % drawn from a Binomial distribution where the probability of a successful
-    % event = rate_interacts and the number of trials = the number of particles
-    % available for interaction.
-    cell_num_attempts = binornd(num_available,rate_interacts);
-    non_zero_attempts = find(cell_num_attempts > 0);
-    if non_zero_attempts
-        for index = 1:length(non_zero_attempts)
-            cell = non_zero_attempts(index);
-            % Select x particles from the distribution of particles currently 
-            % bound to or hovering over the cell and record their stages.
-            x = cell_num_attempts(cell);
-            prtcls_per_stage = cell_prtcls(cell,:);
-            attempts = randsample(1:num_available(cell), x);
-            prev_index = 0;
-            for stage = 1:L
-                num_in_stage = prtcls_per_stage(stage);
-                attempts(attempts > prev_index & ...
-                    attempts <= prev_index + num_in_stage) = stage; 
-                prev_index = prev_index + num_in_stage;
-            end
-
-            % Run a Bernoulli trial for each particle and one at a time, 
-            % compare to the dynamic transition probability to see whether 
-            % or not it succeeds in its attempt.
-            num_internalised = prtcls_per_stage(L+1);
-            Bernoulli_trials = rand(1,x);
-            successes = zeros(1,x);
-            for prtcl = 1:x
-                stage = attempts(prtcl);
-                % If base probabilities have been defined per cell 
-                % proliferation cycle phase.
-                if swtch 
-                    dynamic_prtcl_prob =  base_prtcl_probs(...
-                        cell_phases(cell), stage) * ...
-                        (1-num_internalised/max_prtcl);
-                else
-                    dynamic_prtcl_prob =  base_prtcl_probs(stage) * ...
-                        (1-num_internalised/max_prtcl);
-                end
-                successes(prtcl) = stage * (Bernoulli_trials(prtcl) ...
-                    <= dynamic_prtcl_prob);
-                if stage == L && successes(prtcl) ~=0
-                    num_internalised = num_internalised + 1;
-                end
-            end
-
-            % Update the total/per cell number of particles in each stage 
-            % of the cell-particle interaction model
-            for stage = 1:L
-                success_in_stage = sum(successes == stage);
-                prtcls_per_stage(stage) = prtcls_per_stage(stage) - ...
-                    success_in_stage;
-                prtcls_per_stage(stage + 1) = prtcls_per_stage(stage ...
-                    + 1) + success_in_stage;
-            end
-            cell_prtcls(cell,:) = prtcls_per_stage;
+    % The way we draw this number - the number of particles we are allowing
+    % each cell to attempt to interact with from those hovering on the
+    % lattice site - is by drawing from a Binomial distribution where the
+    % probability of a successful event = rate_interacts and the number of
+    % trials = the number of particles hovering on the lattice site.
+    cell_prtcls(1:N_t,1) = binornd(cell_prtcls(1:N_t,1),rate_interacts);
+    
+    for stage = 1:L
+        % Now that every column of the cell_prtcls array represents the
+        % population of particles in a state of interaction with the
+        % indexed cell, we can simply use another binomial distribution,
+        % but this time using the dynamic probability of transition, to
+        % determine how many in each stage are successful in graduating to
+        % the next stage.
+        num_internalised = cell_prtcls(1:N_t,L+1);
+        % If base probabilities have been defined per cell proliferation 
+        % cycle phase.
+        if swtch 
+            dynamic_prtcl_probs =  base_prtcl_probs(cell_phases(1:N_t), ...
+                stage) .* (1-num_internalised./max_prtcl);      
+        else
+            dynamic_prtcl_probs =  base_prtcl_probs(stage) .* ...
+                        (1-num_internalised./max_prtcl .* ones(N_t,1));
         end
+        successes_in_stage = binornd(cell_prtcls(1:N_t, stage), ...
+            dynamic_prtcl_probs);
+        
+        satisfy = (successes_in_stage+cell_prtcls(1:N_t, stage+1)>max_prtcl);
+        if stage == L && any(satisfy)
+            successes_in_stage(satisfy)=max_prtcl-cell_prtcls(satisfy, stage+1);
+        end
+        
+        % Update the total/per cell number of particles in each stage of
+        % the cell-particle interaction model
+        cell_prtcls(1:N_t,stage) = cell_prtcls(1:N_t,stage) - successes_in_stage;
+        cell_prtcls(1:N_t,stage + 1) = cell_prtcls(1:N_t,stage  + 1) + ...
+            successes_in_stage;
     end
     
     % Update the total class of particles
