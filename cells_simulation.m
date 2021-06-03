@@ -1,18 +1,16 @@
-function evolution_info = cells_simulation(total_tsteps, N_initial, ...
-    DIM, siz_cell, max_prtcl, P_move, P_inherit, cycle_probs, ...
-    rate_interacts, base_prtcl_probs, speed, visual)
+function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 % CELLS_SIMULATION simulates the random proliferation and movement of cells
 % in a 2.D cell monolayer within a culture dish.
 %
-%   The section of the culture dish illustrated is represented by a DIM by
-%   by DIM square matrix/ lattice. The inter-lattice spacing is taken to be
+%   The section of the culture dish illustrated is represented by a dim by
+%   by dim square matrix/ lattice. The inter-lattice spacing is taken to be
 %   the average diameter of a cell (25 micrometers).
 %
-%   The input arguments are:
+%   The input argument is a structure PARAMETERS containing the fields:
 %
 %       total_tsteps    total number of timesteps
 %       N_initial   initial number of cells in the lattice
-%       DIM         lattice dimensions (DIM by DIM)
+%       dim         lattice dimensions (dim by dim)
 %       siz_cell    average diameter of particlular cell-type (micrometers)
 %       max_prtcl   maximum number of particles that a cell can internalise
 %       P_move      probability that a cell moves in 1 timestep
@@ -42,59 +40,56 @@ function evolution_info = cells_simulation(total_tsteps, N_initial, ...
 %                       1 = slower, more comprehensive simulation
 %                       2 = faster, less comprehensive simulation
 %
-%   The output arguments are:
-%       
-%       evolution_info  a structure containing:
-%           cell_population     a record of the cell population over time
-%           cell_lineage        a record of cell lineage 
-%                               [parent cell, daughter cell, generation]
-%           cell_phase_history  a record of the cell phases over time
-%           class_of_particles  a record of the number of particles that
-%                               have not been internalised by or bound to 
-%                               cells (i.e free particles), interacting
-%                               particles and internalised particles over
-%                               time
-%           average_c_o_p       a record of the average class of particles
-%                               over time
-%           cell_c_o_p          a 3D array recording the class of particles
-%                               on a cellular basis after a particular
-%                               amount of time (e.g 1 hour, half an hour)
-%           count_catch         the number of times the catch (ensuring no
-%                               more particles are internalised than the
-%                               carrying capacity allows for) is used.
+%   The output argument is a structure EVOLUTION_INFO containing the fields:
 %
-%   This is the work of Celia Dowling 22/3/21
-
+%       cell_population     a record of the cell population over time
+%       cell_lineage        a record of cell lineage 
+%                           [parent cell, daughter cell, generation]
+%       cell_phase_history  a record of the cell phases over time
+%       class_of_particles  a record of the number of particles that have
+%                           not been internalised by or bound to cells (i.e
+%                           free particles), interacting particles and
+%                           internalised particles over time
+%       average_c_o_p       a record of the average class of particles over
+%                           time
+%       cell_c_o_p          a 3D array recording the class of particles on 
+%                           a cellular basis after a particular amount of
+%                           time (e.g 1 hour, half an hour)
+%       count_catch         the number of times the catch (ensuring no more
+%                           particles are internalised than the carrying
+%                           capacity allows for) is used.
+%
+%   This is the work of Celia Dowling 4/6/21
 
 %%% PREPARE %%%
 
-close all;
-
-% Seed for efficiency purposes
-rng(22)
+% Assign much-used fields of PARAMETERS to shorter variables
+total_tsteps = PARAMETERS.total_tsteps;
+dim = PARAMETERS.dim;    
+max_prtcl = PARAMETERS.max_prtcl; 
 
 % Initialise variables and constants
 t = 0; % the timestep
-N_t = N_initial; % the number of cells at timestep t
+N_t = PARAMETERS.N_initial; % the number of cells at timestep t
 prtcls_initial = N_t * 100; % the number of particles initially
-total_sites = DIM * DIM; % total number of possible positions in petri dish
+total_sites = dim * dim; % total number of possible positions in petri dish
 tsteps_per_hour = floor(total_tsteps/24); % number of timesteps per hour 
 
 % Check how many stages in the cell-particle interactions model there are
 % and whether or not the user has defined different probabilities for
 % different cell-proliferation phases (matrix input) or not (vector input)
-[check,L] = size(base_prtcl_probs); 
+[check,L] = size(PARAMETERS.base_prtcl_probs); 
 swtch = 0;
 if check > 1
     swtch = 1;
 end
 % The number of phases in the cell proliferation cycle
-K = length(cycle_probs); 
+K = length(PARAMETERS.cycle_probs); 
 
-% Randomise the positions of initial cells on a DIM by DIM lattice. From 
+% Randomise the positions of initial cells on a dim by dim lattice. From 
 % now on, all arrays with the name suffix 'cell_' correspond in indexing 
 % with each other. I.e. cell_...(i) corresponds to cell i.
-culture_dish = zeros(DIM);
+culture_dish = zeros(dim);
 cell_sites = zeros(1, total_sites); % preallocate space
 cell_sites(1:N_t) = randsample(1:total_sites, N_t);
 culture_dish(cell_sites(1:N_t))=1; % place cells on culture dish
@@ -122,7 +117,7 @@ cell_c_o_p_per_hour = zeros(total_sites,24+1,3);
 % internalise
 count_catch = 0;
 
-if visual
+if PARAMETERS.visual
     % Prepare movie
     petri_fig = figure;
     axis tight manual % ensures getframe() returns a consistent size
@@ -132,8 +127,8 @@ if visual
     petri_fig.Visible = 'off';
     
     % Save first movie frame (the initial culture dish)
-    draw_frame(N_t, DIM, t, L, max_prtcl, cell_sites, cell_phases, ...
-        cell_prtcls, visual, siz_cell)
+    draw_frame(N_t, dim, t, L, max_prtcl, cell_sites, cell_phases, ...
+        cell_prtcls, PARAMETERS.visual, PARAMETERS.siz_cell)
     petri_movie(t+1) = getframe(petri_fig);
 end
 
@@ -176,7 +171,7 @@ while t < total_tsteps && ~all(tally_prtcls(:,t+1) == [0; ...
     % lattice site - is by drawing from a Binomial distribution where the
     % probability of a successful event = rate_interacts and the number of
     % trials = the number of particles hovering on the lattice site.
-    cell_prtcls(1:N_t,1) = binornd(cell_prtcls(1:N_t,1),rate_interacts);
+    cell_prtcls(1:N_t,1) = binornd(cell_prtcls(1:N_t,1),PARAMETERS.rate_interacts);
    
     for stage = 1:L
         % Now that every column of the cell_prtcls array represents the
@@ -189,10 +184,10 @@ while t < total_tsteps && ~all(tally_prtcls(:,t+1) == [0; ...
         % If base probabilities have been defined per cell proliferation 
         % cycle phase.
         if swtch 
-            dynamic_prtcl_probs =  base_prtcl_probs(cell_phases(1:N_t), ...
-                stage) .* (1-num_internalised./max_prtcl);      
+            dynamic_prtcl_probs =  PARAMETERS.base_prtcl_probs( ...
+                cell_phases(1:N_t),stage) .* (1-num_internalised./max_prtcl);      
         else
-            dynamic_prtcl_probs =  base_prtcl_probs(stage) .* ...
+            dynamic_prtcl_probs =  PARAMETERS.base_prtcl_probs(stage) .* ...
                         (1-num_internalised./max_prtcl .* ones(N_t,1));
         end
         
@@ -226,12 +221,12 @@ while t < total_tsteps && ~all(tally_prtcls(:,t+1) == [0; ...
     % and are given a chance to move
     for choice = 1:N_t
         % Only a portion of those selected will try to move
-        if rand <= P_move
+        if rand <= PARAMETERS.P_move
             % Choose a random cell
             current_site = datasample(cell_sites(1:N_t),1);
             
             % Call local function to choose a new site to move to
-            new_site = choose_adjacent_site(DIM, current_site);
+            new_site = choose_adjacent_site(dim, current_site);
         
             % If the new site is vacant, the cell moves
             if culture_dish(new_site) == 0
@@ -255,12 +250,12 @@ while t < total_tsteps && ~all(tally_prtcls(:,t+1) == [0; ...
         old_phase = cell_phases(cell_sites == parent_site);
         
         % Only a portion of those selected will try to transition
-        if rand <= cycle_probs(old_phase)
+        if rand <= PARAMETERS.cycle_probs(old_phase)
             % For cells in their final proliferation cycle phase
             if old_phase == K
                 % Call local function to choose daughter_site in which to 
                 % attempt to proliferate into (create a daughter cell)
-                daughter_site = choose_adjacent_site(DIM, parent_site);
+                daughter_site = choose_adjacent_site(dim, parent_site);
         
                 % If the new site is vacant, the cell proliferates into it
                 % and returns to the first phase of the cell proliferation
@@ -293,8 +288,10 @@ while t < total_tsteps && ~all(tally_prtcls(:,t+1) == [0; ...
                                 % Probability of daughter cell 1 inheriting
                                 % i nanoparticles from parent cell in stage
                                 pmf(i+1) = 0.5 * nchoosek(n_int,i) *...
-                                    (P_inherit^i * (1-P_inherit)^(n_int-i) + ...
-                                    P_inherit^(n_int-i) * (1-P_inherit)^i);
+                                    (PARAMETERS.P_inherit^i * ...
+                                    (1-PARAMETERS.P_inherit)^(n_int-i) + ...
+                                    PARAMETERS.P_inherit^(n_int-i) * ...
+                                    (1-PARAMETERS.P_inherit)^i);
                             end
                             % Generate an inherited number of interacting/ 
                             % internalised particles for daughter cell 1 and 
@@ -325,12 +322,12 @@ while t < total_tsteps && ~all(tally_prtcls(:,t+1) == [0; ...
     
     %%% RECORD %%%
     
-    if visual
+    if PARAMETERS.visual
         clf
         % Save each figure as a frame in the movie illustrating the evolution
         % of the culture dish
-        draw_frame(N_t, DIM, t, L, max_prtcl, cell_sites, cell_phases, ...
-            cell_prtcls,visual, siz_cell)
+        draw_frame(N_t, dim, t, L, max_prtcl, cell_sites, cell_phases, ...
+            cell_prtcls, PARAMETERS.visual, PARAMETERS.siz_cell)
         petri_movie(t+1) = getframe(petri_fig);
     end
     
@@ -355,10 +352,10 @@ end
 % Print cell particles
 %disp(cell_prtcls((1:N_t),:));
 
-if visual
+if PARAMETERS.visual
     % Play movie
     petri_fig.Visible = 'on';
-    movie(petri_fig, petri_movie, 1, speed);
+    movie(petri_fig, petri_movie, 1, PARAMETERS.speed);
 end
 
 % Calculate average class of particles per timestep (average_c_o_p)
@@ -368,7 +365,7 @@ for row = 1:3
 end
 
 % Save evolution information into a structure
-evolution_info = struct('cell_population', population(1:t+1), ...
+EVOLUTION_INFO = struct('cell_population', population(1:t+1), ...
     'cell_lineage', lineage(1:N_t,:), ...
     'cell_phase_history', cell_phase_history(1:N_t,1:t+1),...
     'class_of_particles', tally_prtcls(:,1:t+1), ...
@@ -382,12 +379,12 @@ end
 
 %%% SUBFUNCTIONS %%%
 
-function new_site = choose_adjacent_site(DIM, current_site)
-% CHOOSE_ADJACENT_SITE Given the current_site in a DIM by DIM lattice, 
-% choose a new_site that is directly adjacent (up, down, left, right)
+function NEW_SITE = choose_adjacent_site(DIM, CURRENT_SITE)
+% CHOOSE_ADJACENT_SITE Given the CURRENT_SITE in a DIM by DIM lattice, 
+% choose a NEW_SITE that is directly adjacent (up, down, left, right)
 
 % Convert linear indices to [row,column] coordinates 
-[current_row, current_col] = ind2sub(DIM, current_site);
+[current_row, current_col] = ind2sub(DIM, CURRENT_SITE);
         
 % Each selected cell chooses a random direction to move in
 delta = randsample([randsample([-1,1],1),0],2);
@@ -399,23 +396,23 @@ new_row_col(new_row_col > DIM) = 1;
 new_row_col(new_row_col < 1) = DIM; 
         
 % Convert [row, column] coordinates to linear indices
-new_site = sub2ind([DIM,DIM], new_row_col(1), new_row_col(2));
+NEW_SITE = sub2ind([DIM,DIM], new_row_col(1), new_row_col(2));
 end
 
 
-function draw_frame(N_t, DIM, t, L, max_prtcl, cell_sites, cell_phases, ...
-    cell_prtcls, visual, siz_cell)
+function draw_frame(N_T, DIM, T, L, MAX_PRTCL, CELL_SITES, CELL_PHASES, ...
+    CELL_PRTCLS, VISUAL, SIZ_CELL)
 % DRAW_FRAME Save each figure as a frame in the movie illustrating the 
 % evolution of the culture dish as cells move, proliferate and internalise
 % particles.
 
-[rows, cols] = ind2sub(DIM, cell_sites);
-rows_um = rows * siz_cell;
-cols_um = cols * siz_cell;
-dim_um = DIM * siz_cell;
-siz_phase = 10*cell_phases; % Sizes of cell depend on cell phase
+[rows, cols] = ind2sub(DIM, CELL_SITES);
+rows_um = rows * SIZ_CELL;
+cols_um = cols * SIZ_CELL;
+dim_um = DIM * SIZ_CELL;
+siz_phase = 10*CELL_PHASES; % Sizes of cell depend on cell phase
 
-if visual == 1 
+if VISUAL == 1 
     %%% Slower, more comprehensive visual %%%
     
     % Draw a scatter plot of the culture dish with:
@@ -424,14 +421,14 @@ if visual == 1
     %       width of cell outline indicating number of interacting particles
     col_cell = [1 0 0];
     % Transparency of cell colour depends on number of internalised particles
-    transp_cell = cell_prtcls(:,end)/max_prtcl;
-    for cell = 1:N_t
+    transp_cell = CELL_PRTCLS(:,end)/MAX_PRTCL;
+    for cell = 1:N_T
         % Width of edge of cell depends on number of interacting particles
-        if L == 1 || sum(cell_prtcls(cell,2:end - 1)) == 0
+        if L == 1 || sum(CELL_PRTCLS(cell,2:end - 1)) == 0
             wid_edge = 0.1;
             col_edge = [0 1 0];
         else
-            wid_edge = 0.1 * sum(cell_prtcls(cell,2:end - 1),2);
+            wid_edge = 0.1 * sum(CELL_PRTCLS(cell,2:end - 1),2);
             col_edge = [0 0 1];
         end 
         % Plot point for cell ensuring the graph represents the lattice 
@@ -448,23 +445,23 @@ else
     %       size of cell indicating phase of cell proliferation cycle
     %       pink opacity of cell colour indicating number of internalised particles
     %       acqua opacity of cell colour indicating number of interacting particles
-    c = [1-sum(cell_prtcls(1:N_t,2:end - 1),2)./100 ... % interacting particles
-        1-(cell_prtcls(1:N_t,end)./max_prtcl) ...% particles internalised
-        ones(N_t,1)]; % to ensure that no particles gives white
-    scatter(cols_um(1:N_t), dim_um - rows_um(1:N_t) + 1, ...
-        siz_phase(1:N_t), c, 'filled', 'MarkerEdgeColor', 'k'); 
+    c = [1-sum(CELL_PRTCLS(1:N_T,2:end - 1),2)./100 ... % interacting particles
+        1-(CELL_PRTCLS(1:N_T,end)./MAX_PRTCL) ...% particles internalised
+        ones(N_T,1)]; % to ensure that no particles gives white
+    scatter(cols_um(1:N_T), dim_um - rows_um(1:N_T) + 1, ...
+        siz_phase(1:N_T), c, 'filled', 'MarkerEdgeColor', 'k'); 
 end
 
-xlim([0.5*siz_cell dim_um+0.5*siz_cell]); 
-ylim([0.5*siz_cell dim_um+0.5*siz_cell]);
+xlim([0.5*SIZ_CELL dim_um+0.5*SIZ_CELL]); 
+ylim([0.5*SIZ_CELL dim_um+0.5*SIZ_CELL]);
 xlabel('$x (\mu m)$', 'Interpreter', 'latex');
 ylabel('$y (\mu m)$', 'Interpreter', 'latex');
-title(sprintf('timestep = %d',t));
+title(sprintf('timestep = %d',T));
 drawnow
 end
 
 
-function X = rand_pmf(x,pmf,num)
+function X = rand_pmf(x,PMF,NUM)
 % RAND_PMF Random numbers from a user defined discrete distribution
 %
 % X=rand_gen(x,pmf,N)
@@ -475,15 +472,15 @@ function X = rand_pmf(x,pmf,num)
 %       value of x
 % N   : number of random values to be chosen
 % output:
-% X   : random signal whit the desired pmf
+% X   : random signal with the desired pmf
 %
 % Example: 
 % pmf=[1/3 1/3 1/3]
 % x=[1 2 3];
 % num=100;
 % X=rand_gen(x,pmf,num);
-a=[0;cumsum((pmf(:)))]*(1./rand(1,num));
-b=a>ones(length(pmf)+1,num);
+a=[0;cumsum((PMF(:)))]*(1./rand(1,NUM));
+b=a>ones(length(PMF)+1,NUM);
 [~,index]=max(b);
 x=x(:);
 if index>1
