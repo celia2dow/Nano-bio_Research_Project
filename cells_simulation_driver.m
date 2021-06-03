@@ -1,45 +1,83 @@
-function cells_simulation_driver()
-% CELLS_SIMULATION_DRIVER drives the cells_simulation simulation with the 
-% specified parameters.
+% CELLS_SIMULATION_DRIVER is a script that drives the cells_simulation 
+% simulation with the specified parameters.
 %
-%   This is the work of Celia Dowling 22/3/21
+%   This is the work of Celia Dowling 3/6/21
+%
+%   The input argument for cells_simulation.m is a structure PARAMETERS 
+%   which has the following fields:
+%
+%       total_tsteps    total number of timesteps
+%       N_initial   initial number of cells in the lattice
+%       dim         lattice dimensions (dim by dim)
+%       siz_cell    average diameter of particlular cell-type (micrometers)
+%       max_prtcl   maximum number of particles that a cell can internalise
+%       P_move      probability that a cell moves in 1 timestep
+%       P_inherit   the probability of a daughter cell born into the site
+%                   of the parent cell inheriting 1 particle from the
+%                   parent cell
+%       cycle_probs a list of K probabilities of transitioning between
+%                   phases in the cell proliferation cycle in 1 timestep 
+%                   (e.g. phase 1 to phase 2, phase 2 to phase 3, ...,  
+%                   phase N-1 to phase N,phase N to phase 1 having 
+%                   proliferated)
+%                       note that these probabilities are discrete 
+%                       approximates of the exponential waiting time rates
+%       rate_interacts  the binomial rate at which particles interact with 
+%                       a given cell, reflecting the dispersion of the 
+%                       particle type (number of particles per timestep)
+%       base_prtcl_probs    a list of L base probabilities of particles 
+%                           transitioning between stages of the 
+%                           cell-particle interaction model in 1 timestep -
+%                           can be 1 probability per transition or can be 1
+%                           probability per cell phase per transition -
+%                           columns inicate interaction stage and rows 
+%                           indicate cell phase
+%       speed       speed of movie frame playback (frames per sec)
+%       visual      the form of visualisation desired which can be 0,1,2
+%                       0 = off
+%                       1 = slower, more comprehensive simulation
+%                       2 = faster, less comprehensive simulation
 
-total_tsteps = 144;     % total number of time steps
-N_initial = 1000; % initial number of agents (cells) in the lattice. At this 
-                % point, this program only works for when N_initial * 100 >
-                % DIM * DIM
-DIM = 100;       % lattice dimensions (DIM by DIM)
-siz_cell = 25;  % average diameter of particlular cell-type (micrometers)
-max_prtcl = 30; % the maximum number of particles a cell can internalise
-P_move = 0.9;   % probability that an agent (cell) moves in 1 timestep
-P_inherit = 0.7; % the probability of a daughter cell born into the site of
-                % the parent cell inheriting 1 particle from the parent cell
-cycle_probs = [0.04,0.04,0.04];
-                % a list of K probabilities of transitioning between phases
-                % phases in the cell proliferation cycle in 1 timestep 
-                % (e.g. phase 1 to phase 2, phase 2 to phase 3, ..., phase 
-                % N-1 to phase N, phase N to phase 1 having proliferated)
-                %    note that these probabilities are discrete 
-                %    approximates of the exponential waiting time rates
-rate_interacts = 0.002;   % the binomial rate at which particles interact 
-                        % with a given cell, reflecting the dispersion of
-                        % the particle type (number of particles per 
-                        % timestep)
-base_prtcl_probs = [0.002,0.002,0.002]; %0.1,0.1,0.1;0.3,0.3,0.3];  
-                % a list of L base probabilities of particles transitioning
-                % between stages of the cell-particle interaction model in 
-                % 1 timestep - can be 1 probability per transition or can
-                % be 1 probability per cell phase per transition - columns
-                % inicate interaction stage and rows indicate cell phase
-speed = 2;      % speed of movie frame playback (how many frames per sec)
-visual = 0;     % the form of visualisation desired which can be 0,1,2
-                %     0 = off
-                %     1 = slower, more comprehensive simulation
-                %     2 = faster, less comprehensive simulation
+% Prepare
+clear;
+close all;
 
-evolution_info = cells_simulation(total_tsteps, N_initial, DIM, ...
-    siz_cell, max_prtcl, P_move, P_inherit, cycle_probs, ...
-    rate_interacts, base_prtcl_probs, speed, visual);
+PARAMETERS = struct( ...
+    'total_tsteps', 144, ... 
+    'N_initial', 1000, ... 
+    'dim', 100, ...      
+    'siz_cell', 25, ...  
+    'max_prtcl', 30, ... 
+    'P_move', 0.9, ...   
+    'P_inherit', 0.7, ... 
+    'cycle_probs',[0.04,0.04,0.04], ...
+    'rate_interacts', 0.1, ...  
+    'base_prtcl_probs', [0.1,0.1,0.1], ...
+    'speed', 2, ...      
+    'visual', 0 ...
+    );
+
+folder_name = ['Simulation_totalTsteps' num2str(PARAMETERS.total_tsteps) ...
+    '_N0' num2str(PARAMETERS.N_initial) ...
+    '_dim' num2str(PARAMETERS.dim) ...
+    '_sizCell' num2str(PARAMETERS.siz_cell) ...
+    '_maxPrtcl' num2str(PARAMETERS.max_prtcl) ...
+    '_Pmove' num2str(PARAMETERS.P_move) ...
+    '_Pinherit' num2str(PARAMETERS.P_inherit) ...
+    '_cycleProbs' num2str(PARAMETERS.cycle_probs(1)) num2str(PARAMETERS.cycle_probs(end)) ...
+    '_rateInteracts' num2str(PARAMETERS.rate_interacts) ...
+    '_basePrtclProbs' num2str(PARAMETERS.base_prtcl_probs(1)) num2str(PARAMETERS.base_prtcl_probs(end)) ...
+    ];
+
+if ~exist(folder_name, 'dir')
+    mkdir(folder_name)
+end
+
+% Seed for efficiency purposes
+rng(22)
+                
+% Run simulation and collect data
+evolution_info = cells_simulation(PARAMETERS);
 
 % Print results
 fprintf("\nCell population per time step: \n");
@@ -62,47 +100,85 @@ fprintf("\nThe number of times the binomial distribution overdraws particles to 
 disp(evolution_info.count_catch)
 
 % Plot all of the interacting particles over time
-figure(1)
+figure(2)
 for time_plot = 1:25
-subplot(5,5,time_plot)
-tsteps_per_hour = floor(total_tsteps/24); % number of timesteps that 
-tstep = (time_plot - 1) * tsteps_per_hour + 1; % equivalent timestep
-histogram(evolution_info.cell_c_o_p(1:evolution_info.cell_population(tstep),time_plot,2))
-title(['At ' num2str(time_plot-1) ' hour/s'])
-xlabel('number interacting')
-ylabel('frequency')
+    subplot(5,5,time_plot)
+    tsteps_per_hour = floor(PARAMETERS.total_tsteps/24); % number of timesteps that 
+    tstep = (time_plot - 1) * tsteps_per_hour + 1; % equivalent timestep
+    histogram(evolution_info.cell_c_o_p(1:evolution_info.cell_population(tstep),time_plot,2))
+    title(['At ' num2str(time_plot-1) ' hour/s'])
+    xlabel('Number interacting')
+    ylabel('Frequency')
 end
 sgtitle('Interacting particles over time')
 
 % Plot all of the internalised particles over time
-figure(2)
+figure(3)
 for time_plot = 1:25
-subplot(5,5,time_plot)
-tsteps_per_hour = floor(total_tsteps/24); % number of timesteps that 
-tstep = (time_plot - 1) * tsteps_per_hour + 1; % equivalent timestep
-histogram(evolution_info.cell_c_o_p(1:evolution_info.cell_population(tstep),time_plot,3))
-title(['At ' num2str(time_plot-1) ' hour/s'])
-xlabel('number internalised')
-ylabel('frequency')
+    subplot(5,5,time_plot)
+    tsteps_per_hour = floor(PARAMETERS.total_tsteps/24); % number of timesteps that 
+    tstep = (time_plot - 1) * tsteps_per_hour + 1; % equivalent timestep
+    histogram(evolution_info.cell_c_o_p(1:evolution_info.cell_population(tstep),time_plot,3))
+    title(['At ' num2str(time_plot-1) ' hour/s'])
+    xlabel('Number internalised')
+    ylabel('Frequency')
 end
 sgtitle('Internalised particles over time')
 
 % Plot the density of cells in different generations
-figure(3)
+figure(4)
 oldest_cell_gen = max(evolution_info.cell_lineage(:,3));
 histogram(evolution_info.cell_lineage(:,3),oldest_cell_gen);
 title('Population of cell generations')
-xlabel('gen')
-ylabel('frequency')
+xlabel('Generation')
+ylabel('Frequency')
 
 % Plot the density of particles in different stages of the particle-cell
 % model
-figure(4)
-[~,L] = size(base_prtcl_probs);
+figure(5)
+[~,L] = size(PARAMETERS.base_prtcl_probs);
 num_in_stage = zeros(1,L+1);
 for s = 1:L+1
     num_in_stage(s) = sum(evolution_info.cell_prtcl_last(:,s),1);
 end
 histogram('BinEdges',-0.5:1:L+0.5,'BinCounts',num_in_stage)
-end
+title('Final populations of particles in different stages')
+xlabel('Cell-particle interaction model stage')
+ylabel('Frequency')
 
+% Plot proliferation events over time
+figure(6)
+scatter(0:(1/6):24,evolution_info.cell_population)
+title('Cell population over time')
+xlabel('time $t$ hours', 'Interpreter', 'latex');
+ylabel('Cell population');
+
+% Plot associated Vs interacting+internalised cells over time
+d1 = evolution_info.average_c_o_p(2,:);     % Average interacting particles per cell over time
+d2 = evolution_info.average_c_o_p(3,:);     % Average internalised particles per cell over time
+d3 = d1 + d2;                               % Histogram Sum ‘d1’+‘d2’
+binrng = 0:(1/6):24;                        % Create Bin Ranges
+
+figure(7)
+subplot(1,2,1)
+bar(binrng, d3, 'r')
+hold on
+bar(binrng, d1, 'b')
+hold off
+legend('Internalised','Interacting')
+title('Stacked histogram')
+xlabel('time $t$ hours', 'Interpreter', 'latex');
+ylabel('Average number of particles per cell');
+
+subplot(1,2,2)
+plot(binrng,d2,'r--',binrng,d1,'b--');
+hold on
+plot(binrng,d3,'Color',[.5 0 .5])
+hold off
+legend('Internalised','Interacting','Associated (internalised or interacting)')
+title('Separate trends')
+xlabel('time $t$ hours', 'Interpreter', 'latex');
+
+sgtitle('Average number of particles associated per cell')
+
+save([pwd '\' folder_name '\variables.mat']);
