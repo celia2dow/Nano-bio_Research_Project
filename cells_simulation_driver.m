@@ -37,6 +37,26 @@
 %                       0 = off
 %                       1 = slower, more comprehensive simulation
 %                       2 = faster, less comprehensive simulation
+%
+%   The output argument for cells_simulation.m is a structure 
+%   EVOLUTION_INFO containing the fields:
+%
+%       cell_population     a record of the cell population over time
+%       cell_lineage        a record of cell lineage 
+%                           [parent cell, daughter cell, generation]
+%       cell_phase_history  a record of the cell phases over time
+%       class_of_particles  a record of the number of particles that have
+%                           not been internalised by or bound to cells (i.e
+%                           free particles), interacting particles and
+%                           internalised particles over time
+%       average_c_o_p       a record of the average class of particles over
+%                           time
+%       cell_c_o_p          a 3D array recording the class of particles on 
+%                           a cellular basis after a particular amount of
+%                           time (e.g 1 hour, half an hour)
+%       count_catch         the number of times the catch (ensuring no more
+%                           particles are internalised than the carrying
+%                           capacity allows for) is used.
 
 % Prepare
 clear;
@@ -77,89 +97,84 @@ end
 rng(22)
                 
 % Run simulation and collect data
-evolution_info = cells_simulation(PARAMETERS);
+EVOLUTION_INFO = cells_simulation(PARAMETERS);
 
 % Print results
 fprintf("\nCell population per time step: \n");
-%disp(evolution_info.cell_population)
+%disp(EVOLUTION_INFO.cell_population)
 fprintf("\nCell lineage [parent cell, daughter cell, generation number]: \n");
-disp(evolution_info.cell_lineage)
+%disp(EVOLUTION_INFO.cell_lineage)
 fprintf("\nPhases per cell (row) per time step (column): \n");
-%disp(evolution_info.cell_phase_history)
-fprintf("\nNumber of particles that are free, interacting and internalised per timestep: \n");
-%disp(evolution_info.class_of_particles)
-fprintf("\nAverage mumber of particles that are free, interacting and internalised per timestep: \n");
-%disp(evolution_info.average_c_o_p)
+%disp(EVOLUTION_INFO.cell_phase_history)
+fprintf("\nAverage mumber of particles that hit, interacting and internalised per cell per timestep: \n");
+%disp(EVOLUTION_INFO.average_c_o_p)
 fprintf("\nFree particles per cell (row) per hour (column): \n")
-%disp(evolution_info.cell_c_o_p(:,:,1))
+%disp(EVOLUTION_INFO.cell_c_o_p(:,:,1))
 fprintf("\nInteracting particles per cell (row) per hour (column): \n")
-%disp(evolution_info.cell_c_o_p(:,:,2))
+%disp(EVOLUTION_INFO.cell_c_o_p(:,:,2))
 fprintf("\nInternalised particles per cell (row) per hour (column): \n")
-%disp(evolution_info.cell_c_o_p(:,:,3))
+%disp(EVOLUTION_INFO.cell_c_o_p(:,:,3))
 fprintf("\nThe number of times the binomial distribution overdraws particles to internalise: \n")
-disp(evolution_info.count_catch)
+%disp(EVOLUTION_INFO.count_catch)
 
-% Plot all of the interacting particles over time
+% Plot all of the interacting Vs internalised particles over time
 figure(2)
+% Find a limit for the y-axis to fix: the largest cell frequency to be
+% plotted
+interact_max = max(EVOLUTION_INFO.cell_c_o_p(:,:,2),[],'all');
+internal_max = max(EVOLUTION_INFO.cell_c_o_p(:,:,3),[],'all');
+x_max = max(interact_max,internal_max);
+local_max = zeros(1,25);
+for index = 2:25
+    [cells_interact,~] = histcounts(EVOLUTION_INFO.cell_c_o_p(:,index,2));
+    [cells_internal,~] = histcounts(EVOLUTION_INFO.cell_c_o_p(:,index,3));
+    local_max(index) = max([cells_interact(2:end), cells_internal(2:end)]);
+end
+y_max = max(local_max);
 for time_plot = 1:25
     subplot(5,5,time_plot)
-    tsteps_per_hour = floor(PARAMETERS.total_tsteps/24); % number of timesteps that 
-    tstep = (time_plot - 1) * tsteps_per_hour + 1; % equivalent timestep
-    histogram(evolution_info.cell_c_o_p(1:evolution_info.cell_population(tstep),time_plot,2))
+    tsteps_per_hour = floor(PARAMETERS.total_tsteps/24); % number of timesteps in an hour
+    tstep = (time_plot - 1) * tsteps_per_hour + 1; % equivalent timestep index
+    % FREQUENCY OF CELLS WITH NUMS OF PARTICLES INTERACTING OVER TIME
+    histogram(EVOLUTION_INFO.cell_c_o_p(1:EVOLUTION_INFO.cell_population(tstep),time_plot,2),...
+        'FaceColor', [0,0,1], 'FaceAlpha', 0.2)
+    hold on
+    % FREQUENCY OF CELLS WITH NUMS OF PARTICLES INTERNALISED OVER TIME
+    histogram(EVOLUTION_INFO.cell_c_o_p(1:EVOLUTION_INFO.cell_population(tstep),time_plot,3),...
+        'FaceColor', [1,0,0], 'FaceAlpha', 0.2)
+    hold off
+    ylim([0,y_max])
+    xlim([0,x_max])
     title(['At ' num2str(time_plot-1) ' hour/s'])
-    xlabel('Number interacting')
-    ylabel('Frequency')
+    xlabel('Number of particles')
+    ylabel('Cell frequency')
+    legend('Interacting','Internalised')
 end
-sgtitle('Interacting particles over time')
+sgtitle('Frequency of cells with certain numbers of interacting/internalised particles over time')
 
-% Plot all of the internalised particles over time
-figure(3)
-for time_plot = 1:25
-    subplot(5,5,time_plot)
-    tsteps_per_hour = floor(PARAMETERS.total_tsteps/24); % number of timesteps that 
-    tstep = (time_plot - 1) * tsteps_per_hour + 1; % equivalent timestep
-    histogram(evolution_info.cell_c_o_p(1:evolution_info.cell_population(tstep),time_plot,3))
-    title(['At ' num2str(time_plot-1) ' hour/s'])
-    xlabel('Number internalised')
-    ylabel('Frequency')
-end
-sgtitle('Internalised particles over time')
 
 % Plot the density of cells in different generations
-figure(4)
-oldest_cell_gen = max(evolution_info.cell_lineage(:,3));
-histogram(evolution_info.cell_lineage(:,3),oldest_cell_gen);
+figure(3)
+oldest_cell_gen = max(EVOLUTION_INFO.cell_lineage(:,3));
+histogram(EVOLUTION_INFO.cell_lineage(:,3),oldest_cell_gen);
 title('Population of cell generations')
 xlabel('Generation')
 ylabel('Frequency')
 
-% Plot the density of particles in different stages of the particle-cell
-% model
-figure(5)
-[~,L] = size(PARAMETERS.base_prtcl_probs);
-num_in_stage = zeros(1,L+1);
-for s = 1:L+1
-    num_in_stage(s) = sum(evolution_info.cell_prtcl_last(:,s),1);
-end
-histogram('BinEdges',-0.5:1:L+0.5,'BinCounts',num_in_stage)
-title('Final populations of particles in different stages')
-xlabel('Cell-particle interaction model stage')
-ylabel('Frequency')
-
 % Plot proliferation events over time
-figure(6)
-scatter(0:(1/6):24,evolution_info.cell_population)
+figure(4)
+scatter(0:(1/6):24,EVOLUTION_INFO.cell_population,4,'k','filled')
 title('Cell population over time')
 xlabel('time $t$ hours', 'Interpreter', 'latex');
 ylabel('Cell population');
 
 % Plot associated Vs interacting+internalised cells over time
-d1 = evolution_info.average_c_o_p(2,:);     % Average interacting particles per cell over time
-d2 = evolution_info.average_c_o_p(3,:);     % Average internalised particles per cell over time
+d1 = EVOLUTION_INFO.average_c_o_p(2,:);     % Average interacting particles per cell over time
+d2 = EVOLUTION_INFO.average_c_o_p(3,:);     % Average internalised particles per cell over time
 d3 = d1 + d2;                               % Histogram Sum ‘d1’+‘d2’
 binrng = 0:(1/6):24;                        % Create Bin Ranges
 
-figure(7)
+figure(5)
 subplot(1,2,1)
 bar(binrng, d3, 'r')
 hold on
