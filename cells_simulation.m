@@ -106,13 +106,13 @@ successes_in_stage = zeros(total_sites, L);
 
 % Initialise arrays/constants for evolution_info fields
 population = [N_t zeros(1,total_tsteps)]; % cell_population
-lineage = [zeros(N_t,1) (1:N_t)' ones(N_t,1); zeros(total_tsteps,3)]; % cell_lineage
+cell_lineage = [zeros(N_t,1) (1:N_t)' ones(N_t,1); zeros(total_tsteps,3)];
 cell_phase_history = [cell_phases' zeros(total_sites, total_tsteps)]; % cell_phase_history
 % Record free particles, interacting particles and internalised particles
-% per timestep in system (class_of_particles)
+% per timestep in system
 tally_prtcls = [prtcls_initial zeros(1, total_tsteps); zeros(2, total_tsteps + 1)];
 % Record class of particles on a cell basis (cell_c_o_p) per hour
-cell_c_o_p_per_hour = zeros(total_sites,24+1,3);
+cell_c_o_p = zeros(total_sites,24+1,3);
 % The number of times the binomial distribution overdraws particles to
 % internalise
 count_catch = 0;
@@ -270,8 +270,8 @@ while t < total_tsteps && ~all(tally_prtcls(:,t+1) == [0; ...
                     % Add the [parent cell #, daughter cell #, generation #]
                     % to track lineage
                     parent_cell_num = find(cell_sites == parent_site);
-                    gen_num = lineage(lineage(:,2) == parent_cell_num, 3) + 1;
-                    lineage(N_t,:) = [parent_cell_num, N_t, gen_num];
+                    gen_num = cell_lineage(cell_lineage(:,2) == parent_cell_num, 3) + 1;
+                    cell_lineage(N_t,:) = [parent_cell_num, N_t, gen_num];
                     
                     % The inheritance of internalised/ interacting
                     % nanoparticles from a cell with n_int nanoparticles 
@@ -333,11 +333,11 @@ while t < total_tsteps && ~all(tally_prtcls(:,t+1) == [0; ...
     
     % Record the class of particles on a cell basis every hour
     if mod(t, tsteps_per_hour) == 0
-        cell_c_o_p_per_hour(1:N_t,t/tsteps_per_hour+1,1) = ...
+        cell_c_o_p(1:N_t,t/tsteps_per_hour+1,1) = ...
             cell_prtcls(1:N_t,1); % Cells that hit
-        cell_c_o_p_per_hour(1:N_t,t/tsteps_per_hour+1,2) = ...
+        cell_c_o_p(1:N_t,t/tsteps_per_hour+1,2) = ...
             sum(cell_prtcls(1:N_t,2:L),2); % Cells that interact
-        cell_c_o_p_per_hour(1:N_t,t/tsteps_per_hour+1,3) = ...
+        cell_c_o_p(1:N_t,t/tsteps_per_hour+1,3) = ...
             cell_prtcls(1:N_t,L+1); % Cells that are internalised
     end
     
@@ -359,20 +359,18 @@ if PARAMETERS.visual
 end
 
 % Calculate average class of particles per timestep (average_c_o_p)
-average_prtcls = zeros(3,t+1);
+average_c_o_p = zeros(3,t+1);
 for row = 1:3
-    average_prtcls(row,:) = tally_prtcls(row,1:t+1)./population(1:t+1);
+    average_c_o_p(row,:) = tally_prtcls(row,1:t+1)./population(1:t+1);
 end
 
 % Save evolution information into a structure
 EVOLUTION_INFO = struct('cell_population', population(1:t+1), ...
-    'cell_lineage', lineage(1:N_t,:), ...
+    'cell_lineage', cell_lineage(1:N_t,:), ...
     'cell_phase_history', cell_phase_history(1:N_t,1:t+1),...
-    'class_of_particles', tally_prtcls(:,1:t+1), ...
-    'average_c_o_p', average_prtcls(:,1:t+1), ...
-    'cell_c_o_p', cell_c_o_p_per_hour(1:N_t,:,:), ...
-    'count_catch', count_catch, ...
-    'cell_prtcl_last', cell_prtcls(1:N_t,:));
+    'average_c_o_p', average_c_o_p(:,1:t+1), ...
+    'cell_c_o_p', cell_c_o_p(1:N_t,:,:), ...
+    'count_catch', count_catch);
 end
 
 
