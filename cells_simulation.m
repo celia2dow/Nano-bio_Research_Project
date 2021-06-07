@@ -1,124 +1,171 @@
 function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 % CELLS_SIMULATION simulates the random proliferation and movement of cells
-% in a 2.D cell monolayer within a culture dish.
+% in a 2.D cell monolayer within a culture dish as they interact with and
+% internalised particles.
 %
-%   The section of the culture dish illustrated is represented by a dim by
-%   by dim square matrix/ lattice. The inter-lattice spacing is taken to be
-%   the average diameter of a cell (25 micrometers).
+%   This is the work of Celia Dowling 8/6/21
 %
 %   The input argument is a structure PARAMETERS containing the fields:
 %
-%       total_tsteps    total number of timesteps
-%       N_initial   initial number of cells in the lattice
-%       dim         lattice dimensions (dim by dim)
-%       siz_cell    average diameter of particlular cell-type (micrometers)
-%       max_prtcl   maximum number of particles that a cell can internalise
-%       P_move      probability that a cell moves in 1 timestep
-%       P_inherit   the probability of a daughter cell born into the site
-%                   of the parent cell inheriting 1 particle from the
-%                   parent cell
-%       cycle_probs a list of K probabilities of transitioning between
-%                   phases in the cell proliferation cycle in 1 timestep 
-%                   (e.g. phase 1 to phase 2, phase 2 to phase 3, ...,  
-%                   phase N-1 to phase N,phase N to phase 1 having 
-%                   proliferated)
-%                       note that these probabilities are discrete 
-%                       approximates of the exponential waiting time rates
-%       rate_interacts  the binomial rate at which particles interact with 
-%                       a given cell, reflecting the dispersion of the 
-%                       particle type (number of particles per timestep)
-%       base_prtcl_probs    a list of L base probabilities of particles 
-%                           transitioning between stages of the 
-%                           cell-particle interaction model in 1 timestep -
-%                           can be 1 probability per transition or can be 1
-%                           probability per cell phase per transition -
-%                           columns inicate interaction stage and rows 
-%                           indicate cell phase
-%       speed       speed of movie frame playback (frames per sec)
-%       visual      the form of visualisation desired which can be 0,1,2
-%                       0 = off
-%                       1 = slower, more comprehensive simulation
-%                       2 = faster, less comprehensive simulation
+%       simulation_duration (hours) Time length of the simulation.    
+%       tstep_duration (hours)      Recommended to be equal to the shortest
+%                                   expected waiting time (EWT), usually 
+%                                   EWT_move.
+%       initial_num_cells           Initial number of cells in the lattice.
+%       prtcls_per_cell             Number of particles added to the cell
+%                                   monolayer per cell
+%       cell_diam (micrometers)     Average diameter of particlular cell-type. 
+%       dim (cell diameters)        Lattice dimensions are dim by dim.
+%       EWT_move (hours)            Expected waiting time for one cell to 
+%                                   move 1 cell diameter. Must begreater than
+%                                   or equal to tstep_duration.
+%       EWTs_proliferate (hours)    List of K expected waiting times for 1
+%                                   cell to transition out of each phase in
+%                                   the cell proliferation cycle (e.g. mean 
+%                                   time spent in phase 1, mean time spent 
+%                                   in phase 2,..., mean time spent in phase
+%                                   K before proliferating). Elements must 
+%                                   be greater than or equal to
+%                                   tstep_duration. They should add up to
+%                                   give the expected waiting time for
+%                                   proliferation.
+%       EWFs_internalise (hours)    List of L expected waiting times for 1
+%                                   particle to transition out of each
+%                                   stage in the cell-particle interaction 
+%                                   model. Can be 1 EWT per stage (e.g. 
+%                                   mean time spent free or in stage 0 
+%                                   once having hit a cell, mean time spent 
+%                                   in stage 1, ..., mean time spent in stage 
+%                                   L-1 before transitioning into stage L i.e. 
+%                                   being internalised) or can be 1 EWT per
+%                                   stage per cell phase; columns indicating
+%                                   interaction stage and rows indicating
+%                                   cell phase. Elements must be greater than
+%                                   or equal to tstep_duration. They should
+%                                   add up, along with 1/rate_diffusivity,
+%                                   to give the expected waiting time for
+%                                   internalisation of 1 particle.
+%       prob_inherit                The probability of a daughter cell born 
+%                                   into the site of the parent cell 
+%                                   inheriting 1 particle from the parent
+%                                   cell.
+%       rate_prtcl_diffusivity (per tstep) The rate at which particles interact  
+%                                   with a given cell (fraction of free particles
+%                                   per timestep), reflecting the diffusivity 
+%                                   of the particle type.
+%       max_prtcl                   Maximum number of particles that a cell 
+%                                   can have in the specified cell-particle 
+%                                   interaction stage (i.e. carrying
+%                                   capacity).
+%       limiting_stage              The specified cell-particle interaction
+%                                   stage that limits the rate of particle
+%                                   internalisation. Must be between 1 and
+%                                   L for carrying capacity to be applied.
+%                                   Setting to 0 will turn off carrying
+%                                   capacity.
+%       vid_speed (frames per sec)  Speed of movie frame playback.
+%       visual                      The form of visualisation desired which 
+%                                   can be 0,1 or 2:
+%                                       0 = off
+%                                       1 = slower, more comprehensive vid
+%                                       2 = faster, less comprehensive vid
 %
 %   The output argument is a structure EVOLUTION_INFO containing the fields:
 %
-%       cell_population     a record of the cell population over time
-%       cell_lineage        a record of cell lineage 
+%       cell_population     A record of the cell population over time.
+%       cell_lineage        A record of cell lineage: 
 %                           [parent cell, daughter cell, generation]
-%       cell_phase_history  a record of the cell phases over time
-%       class_of_particles  a record of the number of particles that have
-%                           not been internalised by or bound to cells (i.e
-%                           free particles), interacting particles and
-%                           internalised particles over time
-%       average_c_o_p       a record of the average class of particles over
-%                           time
-%       cell_c_o_p          a 3D array recording the class of particles on 
+%       cell_phase_history  A record of the cell phases over time.
+%       average_c_o_p       A record of the average class of particles over 
+%                           time; the number that have not been internalised 
+%                           by or bound to cells (i.e free particles),
+%                           the number of interacting particles and that of
+%                           internalised particles.
+%       cell_c_o_p          A 3D array recording the class of particles
+%                           (free AND hit, interacting, internalised) on
 %                           a cellular basis after a particular amount of
-%                           time (e.g 1 hour, half an hour)
-%       count_catch         the number of times the catch (ensuring no more
+%                           time (e.g 1 hour, half an hour).
+%       count_catch         The number of times the catch (ensuring no more
 %                           particles are internalised than the carrying
 %                           capacity allows for) is used.
-%
-%   This is the work of Celia Dowling 4/6/21
 
-%%% PREPARE %%%
 
-% Assign much-used fields of PARAMETERS to shorter variables
-total_tsteps = PARAMETERS.total_tsteps;
-dim = PARAMETERS.dim;    
-max_prtcl = PARAMETERS.max_prtcl; 
 
-% Initialise variables and constants
-t = 0; % the timestep
-N_t = PARAMETERS.N_initial; % the number of cells at timestep t
-prtcls_initial = N_t * 100; % the number of particles initially
-total_sites = dim * dim; % total number of possible positions in petri dish
-tsteps_per_hour = floor(total_tsteps/24); % number of timesteps per hour 
+%%% CONVERT EXPECTED WAITING TIMES INTO RATES PER TSTEP %%%
 
+% Rate at which a cell moves.
+rate_move = PARAMETERS.tstep_duration/PARAMETERS.EWT_move;
+
+% A list of K rates of cells transitioning between phases in the cell 
+% proliferation cycle (e.g. phase 1 to phase 2, phase 2 to phase 3, ..., 
+% phase K-1 to phase K, phase K to phase 1 having proliferated).
+rates_proliferate = PARAMETERS.tstep_duration./PARAMETERS.EWTs_proliferate;
+% The number of phases in the cell proliferation cycle.
+K = length(rates_proliferate); 
+
+% A list of L rates of particles transitioning between stages of the cell-
+% particle interaction model unaffected by carrying capacity (e.g. free to 
+% stage 1, stage 1 to stage 2, ..., stage L-1 to stage L or internalised).
+% Can be 1 rate per transition or can be 1 rate per cell phase per
+% transition - columns inicate interaction stage and rows indicate cell
+% phase.
+rates_internalise = PARAMETERS.tstep_duration./PARAMETERS.EWTs_internalise;
 % Check how many stages in the cell-particle interactions model there are
-% and whether or not the user has defined different probabilities for
-% different cell-proliferation phases (matrix input) or not (vector input)
-[check,L] = size(PARAMETERS.base_prtcl_probs); 
+% and whether or not the user has defined different rates for different
+% cell-proliferation phases (matrix input) or not (vector input).
+[check,L] = size(rates_internalise); 
 swtch = 0;
 if check > 1
     swtch = 1;
 end
-% The number of phases in the cell proliferation cycle
-K = length(PARAMETERS.cycle_probs); 
+
+
+%%% INITIALISE VARIABLES, CONSTANTS & VISUAL %%%
+
+N_tstep = PARAMETERS.initial_num_cells; % the number of cells at timestep t
+prtcls_initial = N_tstep * PARAMETERS.prtcls_per_cell; % the number of particles initially
+total_sites = PARAMETERS.dim ^2; % total number of possible positions in petri dish
+% Number of timesteps of duration tstep_duration that fit into
+% simulation_duration number of hours.
+total_tsteps = floor(PARAMETERS.simulation_duration/PARAMETERS.tstep_duration);
+tsteps_per_hour = 1/PARAMETERS.tstep_duration; % number of timesteps per hour 
+tstep = 0; % the current timestep
 
 % Randomise the positions of initial cells on a dim by dim lattice. From 
 % now on, all arrays with the name suffix 'cell_' correspond in indexing 
 % with each other. I.e. cell_...(i) corresponds to cell i.
-culture_dish = zeros(dim);
+culture_dish = zeros(PARAMETERS.dim);
 cell_sites = zeros(1, total_sites); % preallocate space
-cell_sites(1:N_t) = randsample(1:total_sites, N_t);
-culture_dish(cell_sites(1:N_t))=1; % place cells on culture dish
+cell_sites(1:N_tstep) = randsample(1:total_sites, N_tstep);
+culture_dish(cell_sites(1:N_tstep))=1; % place cells on culture dish
                                                
-% Randomise the phases of initial cells
+% Randomise the phases of initial cells.
 cell_phases = zeros(1, total_sites); % preallocate space
-cell_phases(1:N_t) = datasample(1:K, N_t);
+cell_phases(1:N_tstep) = datasample(1:K, N_tstep);
 
 % Initialise arrays recording the number of particles in different stages
 % (per column) of interaction with each cell (per row). The first column is
 % to simulate the number of particles hovering around one cell initially.
 cell_prtcls = zeros(total_sites, L+1);
+% Initialise array for recording the particles that transition each
+% timestep.
 successes_in_stage = zeros(total_sites, L);
 
-% Initialise arrays/constants for evolution_info fields
-population = [N_t zeros(1,total_tsteps)]; % cell_population
-cell_lineage = [zeros(N_t,1) (1:N_t)' ones(N_t,1); zeros(total_tsteps,3)];
-cell_phase_history = [cell_phases' zeros(total_sites, total_tsteps)]; % cell_phase_history
+% Initialise arrays/constants for EVOLUTION_INFO fields.
+cell_population = [N_tstep zeros(1,total_tsteps)];
+cell_lineage = [zeros(N_tstep,1) (1:N_tstep)' ones(N_tstep,1); zeros(total_tsteps,3)];
+cell_phase_history = [cell_phases' zeros(total_sites, total_tsteps)]; 
 % Record free particles, interacting particles and internalised particles
-% per timestep in system
+% per timestep in system.
 tally_prtcls = [prtcls_initial zeros(1, total_tsteps); zeros(2, total_tsteps + 1)];
-% Record class of particles on a cell basis (cell_c_o_p) per hour
+% Record class of particles on a cell basis per hour.
 cell_c_o_p = zeros(total_sites,24+1,3);
 % The number of times the binomial distribution overdraws particles to
-% internalise
+% internalise.
 count_catch = 0;
 
 if PARAMETERS.visual
-    % Prepare movie
+    % Prepare movie.
     petri_fig = figure;
     axis tight manual % ensures getframe() returns a consistent size
     %ax = gca;
@@ -126,107 +173,117 @@ if PARAMETERS.visual
     petri_movie(total_tsteps + 1) = struct('cdata',[],'colormap',[]);
     petri_fig.Visible = 'off';
     
-    % Save first movie frame (the initial culture dish)
-    draw_frame(N_t, dim, t, L, max_prtcl, cell_sites, cell_phases, ...
-        cell_prtcls, PARAMETERS.visual, PARAMETERS.siz_cell)
-    petri_movie(t+1) = getframe(petri_fig);
+    % Save first movie frame (the initial culture dish).
+    draw_frame(N_tstep, PARAMETERS.dim, tstep, L, PARAMETERS.max_prtcl, ...
+        cell_sites, cell_phases, cell_prtcls, PARAMETERS.visual, ...
+        PARAMETERS.cell_diam, PARAMETERS.tstep_duration)
+    petri_movie(tstep+1) = getframe(petri_fig);
 end
 
+
 % Loop stops when timesteps are up or when culture dish is full of cells
-% with their maximum capacity of particles
-while t < total_tsteps && ~all(tally_prtcls(:,t+1) == [0; ...
-        prtcls_initial-min(total_sites*max_prtcl,prtcls_initial); ...
-        min(total_sites*max_prtcl,prtcls_initial)],'all')
-    t = t+1;
+% with their maximum capacity of particles.
+while tstep < total_tsteps && ~all(tally_prtcls(:,tstep+1) == [0; ...
+        prtcls_initial-min(total_sites*PARAMETERS.max_prtcl,prtcls_initial); ...
+        min(total_sites*PARAMETERS.max_prtcl,prtcls_initial)],'all')
+    tstep = tstep+1;
+    
+    
     %%% CELL-PARTICLE INTERACTIONS %%%
     
     % Assuming that particles are constantly evenly dispersing themselves  
     % around the petri dish/matrix, then the number of particles hovering  
-    % over a matrix site at the beginning of each timestep (prtcls_hover) 
+    % over a matrix site at the beginning of each timestep cell_prtcls(:,1)
     % will be the total number of particles that are not internalised or 
     % currently bound to/interacting with cells divided amongst the number 
     % of matrix sites.
-    tally_prtcls(:,t+1) = tally_prtcls(:,t);
-    num_per_site = tally_prtcls(1,t+1)/total_sites; % This may be a fraction
+    tally_prtcls(:,tstep+1) = tally_prtcls(:,tstep);
+    num_per_site = tally_prtcls(1,tstep+1)/total_sites; % This may be a fraction
     cell_prtcls(:,1) = floor(num_per_site); % This may be 0
     if mod(num_per_site, floor(num_per_site)) ~= 0 % Check for remainder
-        leftovers = tally_prtcls(1,t+1) - total_sites * floor(num_per_site);
+        leftovers = tally_prtcls(1,tstep+1) - total_sites * floor(num_per_site);
         % Randomly distribute the remaining particles around the matrix and
-        % if a cell lies on such a site, add to its hovering particle count
+        % if a cell lies on such a site, add to its hovering particle
+        % count.
         prtcl_sites = randsample(1:total_sites, leftovers);
         [~, indices] = intersect(cell_sites, prtcl_sites);
         cell_prtcls(indices,1) = cell_prtcls(indices,1) + 1;
     end
     
-    % Given that rate_interacts is a measure of the dispersivity of a 
-    % particle type, we will begin by seeing if any hovering particles that 
-    % are currently "free" (so in the first column of our cell_prtcls 
-    % array) and are not interacting with a cell (not actually in stage 0 
-    % in which particles are interacting with but unbound to the cell) will 
-    % enter into an interaction with the cell (remain in the population of 
-    % cells in stage 0 of the cell-particle internalisation model).
-    
-    % The way we draw this number - the number of particles we are allowing
-    % each cell to attempt to interact with from those hovering on the
-    % lattice site - is by drawing from a Binomial distribution where the
-    % probability of a successful event = rate_interacts and the number of
-    % trials = the number of particles hovering on the lattice site.
-    cell_prtcls(1:N_t,1) = binornd(cell_prtcls(1:N_t,1),PARAMETERS.rate_interacts);
+    % We draw the number of free particles that hit a cell and attempt to
+    % interact with it (i.e. that are available in stage 0 of the cell-
+    % particle interaction model) from a Binomial distribution where the
+    % probability of a successful event = rate_prtcl_diffusivity and the 
+    % number of trials = the number of particles hovering on the lattice 
+    % site (i.e. currently in the first column of our cell_prtcls array).
+    cell_prtcls(1:N_tstep,1) = binornd(cell_prtcls(1:N_tstep,1),...
+        PARAMETERS.rate_prtcl_diffusivity);
    
     for stage = 1:L
         % Now that every column of the cell_prtcls array represents the
-        % population of particles in a state of interaction with the
-        % indexed cell, we can simply use another binomial distribution,
-        % but this time using the dynamic probability of transition, to
-        % determine how many in each stage are successful in graduating to
-        % the next stage.
-        num_internalised = cell_prtcls(1:N_t,L+1);
-        % If base probabilities have been defined per cell proliferation 
-        % cycle phase.
-        if swtch 
-            dynamic_prtcl_probs =  PARAMETERS.base_prtcl_probs( ...
-                cell_phases(1:N_t),stage) .* (1-num_internalised./max_prtcl);      
-        else
-            dynamic_prtcl_probs =  PARAMETERS.base_prtcl_probs(stage) .* ...
-                        (1-num_internalised./max_prtcl .* ones(N_t,1));
+        % population of particles in a stage of interaction with the
+        % indexed cell (stage 0 to stage L), we can simply use another 
+        % binomial distribution to find how many transition to the next stage, 
+        % but this time using the dynamic rate of transition dependent on
+        % the number of particles in the limiting, stage to determine how many
+        % in each stage are successful in graduating to the next stage.
+        current_carrying_total = cell_prtcls(1:N_tstep,PARAMETERS.limiting_stage+1);
+        % Check if internalisation rates have been defined per cell 
+        % proliferation cycle phase or it they're simply uniform over all 
+        % phases. Only dynamically affect the rates of transitions occuring 
+        % up to the limiting stage.
+        if stage < PARAMETERS.limiting_stage+1 % Affected by carrying capacity
+            if swtch % Dependent on phase
+                dynamic_prtcl_rates =  rates_internalise(cell_phases(1:N_tstep),...
+                    stage) .* (1-current_carrying_total./PARAMETERS.max_prtcl);      
+            else % Not dependent on phase
+                dynamic_prtcl_rates =  rates_internalise(stage) .* (1-...
+                    current_carrying_total./PARAMETERS.max_prtcl .* ones(N_tstep,1));
+            end
+        else % Unaffected by carrying capacity
+            if swtch % Dependent on phase
+                dynamic_prtcl_rates =  rates_internalise(cell_phases(1:N_tstep),stage);      
+            else % Not dependent on phase
+                dynamic_prtcl_rates =  rates_internalise(stage);
+            end
         end
-        
         % Due to wanting to keep the total number of particles allowed to
         % transition from a stage in one timestep static in spite of 
         % successful transitions on the same timestep, save the number of 
         % successes without yet updating the cell_prtcl array
-        successes_in_stage(1:N_t,stage) = binornd(cell_prtcls(1:N_t, stage), ...
-            dynamic_prtcl_probs);
-        
-        satisfy = (successes_in_stage(1:N_t,stage)+cell_prtcls(1:N_t, stage+1)>max_prtcl);
-        if stage == L && any(satisfy)
-            successes_in_stage(satisfy,stage)=max_prtcl-cell_prtcls(satisfy, stage+1);
+        successes_in_stage(1:N_tstep,stage) = binornd(cell_prtcls(1:N_tstep,...
+            stage), dynamic_prtcl_rates);
+        satisfy = (successes_in_stage(1:N_tstep,stage)+cell_prtcls(1:N_tstep,...
+            stage+1)>PARAMETERS.max_prtcl);
+        if stage == PARAMETERS.limiting_stage-1 && any(satisfy)
+            successes_in_stage(satisfy,stage)=PARAMETERS.max_prtcl-cell_prtcls(satisfy, stage+1);
             count_catch = count_catch + 1;
         end
     end
     
     % Update the total/per cell number of particles in each stage of
     % the cell-particle interaction model
-    cell_prtcls(1:N_t,1:L) = cell_prtcls(1:N_t,1:L) - successes_in_stage(1:N_t,1:L);
-    cell_prtcls(1:N_t,2:L+1) = cell_prtcls(1:N_t,2:L+1) + successes_in_stage(1:N_t,1:L);
+    cell_prtcls(1:N_tstep,1:L) = cell_prtcls(1:N_tstep,1:L) - successes_in_stage(1:N_tstep,:);
+    cell_prtcls(1:N_tstep,2:L+1) = cell_prtcls(1:N_tstep,2:L+1) + successes_in_stage(1:N_tstep,:);
     
     % Update the total class of particles
-    tally_prtcls(2,t+1) = sum(cell_prtcls(1:N_t,2:L),'all'); % interacting
-    tally_prtcls(3,t+1) = sum(cell_prtcls(1:N_t,L+1)); % internalised
-    tally_prtcls(1,t+1) = prtcls_initial - sum(tally_prtcls(2:3,t+1)); % free
+    tally_prtcls(2,tstep+1) = sum(cell_prtcls(1:N_tstep,2:L),'all'); % interacting
+    tally_prtcls(3,tstep+1) = sum(cell_prtcls(1:N_tstep,L+1)); % internalised
+    tally_prtcls(1,tstep+1) = prtcls_initial - sum(tally_prtcls(2:3,tstep+1)); % free
+    
     
     %%% MOVEMENT %%%
     
-    % N_t cells are selected with replacement, at random, one at a time
+    % N_tstep cells are selected with replacement, at random, one at a time
     % and are given a chance to move
-    for choice = 1:N_t
+    for choice = 1:N_tstep
         % Only a portion of those selected will try to move
-        if rand <= PARAMETERS.P_move
+        if rand <= rate_move
             % Choose a random cell
-            current_site = datasample(cell_sites(1:N_t),1);
+            current_site = datasample(cell_sites(1:N_tstep),1);
             
             % Call local function to choose a new site to move to
-            new_site = choose_adjacent_site(dim, current_site);
+            new_site = choose_adjacent_site(PARAMETERS.dim, current_site);
         
             % If the new site is vacant, the cell moves
             if culture_dish(new_site) == 0
@@ -239,39 +296,39 @@ while t < total_tsteps && ~all(tally_prtcls(:,t+1) == [0; ...
 
     %%% CELL PROLIFERATION CYCLE %%%
     
-    N_t_static = N_t; % keep N_t fixed for the attempted prolif. events
+    N_tstep_static = N_tstep; % keep N_tstep fixed for the attempted prolif. events
     
     % N_t_static cells are selected with replacement, at random, one at a 
     % time and are given a chance to transition to the next phase in the
     % cell proliferation cycle and perhaps proliferate.    
-    for choice = 1:N_t_static
+    for choice = 1:N_tstep_static
         % Choose a random cell
-        parent_site = datasample(cell_sites(1:N_t),1);
+        parent_site = datasample(cell_sites(1:N_tstep),1);
         old_phase = cell_phases(cell_sites == parent_site);
         
         % Only a portion of those selected will try to transition
-        if rand <= PARAMETERS.cycle_probs(old_phase)
+        if rand <= rates_proliferate(old_phase)
             % For cells in their final proliferation cycle phase
             if old_phase == K
                 % Call local function to choose daughter_site in which to 
                 % attempt to proliferate into (create a daughter cell)
-                daughter_site = choose_adjacent_site(dim, parent_site);
+                daughter_site = choose_adjacent_site(PARAMETERS.dim, parent_site);
         
                 % If the new site is vacant, the cell proliferates into it
                 % and returns to the first phase of the cell proliferation
                 % cycle as well
                 if culture_dish(daughter_site) == 0
                     culture_dish(daughter_site) = 1;
-                    N_t = N_t + 1;
-                    cell_sites(N_t) = daughter_site;
-                    cell_phases(N_t) = 1;
+                    N_tstep = N_tstep + 1;
+                    cell_sites(N_tstep) = daughter_site;
+                    cell_phases(N_tstep) = 1;
                     cell_phases(cell_sites == parent_site) = 1;
                     
                     % Add the [parent cell #, daughter cell #, generation #]
                     % to track lineage
                     parent_cell_num = find(cell_sites == parent_site);
                     gen_num = cell_lineage(cell_lineage(:,2) == parent_cell_num, 3) + 1;
-                    cell_lineage(N_t,:) = [parent_cell_num, N_t, gen_num];
+                    cell_lineage(N_tstep,:) = [parent_cell_num, N_tstep, gen_num];
                     
                     % The inheritance of internalised/ interacting
                     % nanoparticles from a cell with n_int nanoparticles 
@@ -288,10 +345,10 @@ while t < total_tsteps && ~all(tally_prtcls(:,t+1) == [0; ...
                                 % Probability of daughter cell 1 inheriting
                                 % i nanoparticles from parent cell in stage
                                 pmf(i+1) = 0.5 * nchoosek(n_int,i) *...
-                                    (PARAMETERS.P_inherit^i * ...
-                                    (1-PARAMETERS.P_inherit)^(n_int-i) + ...
-                                    PARAMETERS.P_inherit^(n_int-i) * ...
-                                    (1-PARAMETERS.P_inherit)^i);
+                                    (PARAMETERS.prob_inherit^i * ...
+                                    (1-PARAMETERS.prob_inherit)^(n_int-i) + ...
+                                    PARAMETERS.prob_inherit^(n_int-i) * ...
+                                    (1-PARAMETERS.prob_inherit)^i);
                             end
                             % Generate an inherited number of interacting/ 
                             % internalised particles for daughter cell 1 and 
@@ -305,7 +362,7 @@ while t < total_tsteps && ~all(tally_prtcls(:,t+1) == [0; ...
                         % Update record of particles inside/ interacting 
                         % with cells
                         cell_prtcls(parent_cell_num, stage) = daught_1;
-                        cell_prtcls(N_t, stage) = daught_2;
+                        cell_prtcls(N_tstep, stage) = daught_2;
                     end
                 else 
                     % If the new site isn't vacant, the cell doesn't change
@@ -320,32 +377,34 @@ while t < total_tsteps && ~all(tally_prtcls(:,t+1) == [0; ...
         end
     end
     
+    
     %%% RECORD %%%
     
     if PARAMETERS.visual
         clf
         % Save each figure as a frame in the movie illustrating the evolution
         % of the culture dish
-        draw_frame(N_t, dim, t, L, max_prtcl, cell_sites, cell_phases, ...
-            cell_prtcls, PARAMETERS.visual, PARAMETERS.siz_cell)
-        petri_movie(t+1) = getframe(petri_fig);
+        draw_frame(N_tstep, PARAMETERS.dim, tstep, L, PARAMETERS.max_prtcl,...
+            cell_sites, cell_phases, cell_prtcls, PARAMETERS.visual,...
+            PARAMETERS.cell_diam)
+        petri_movie(tstep+1) = getframe(petri_fig);
     end
     
     % Record the class of particles on a cell basis every hour
-    if mod(t, tsteps_per_hour) == 0
-        cell_c_o_p(1:N_t,t/tsteps_per_hour+1,1) = ...
-            cell_prtcls(1:N_t,1); % Cells that hit
-        cell_c_o_p(1:N_t,t/tsteps_per_hour+1,2) = ...
-            sum(cell_prtcls(1:N_t,2:L),2); % Cells that interact
-        cell_c_o_p(1:N_t,t/tsteps_per_hour+1,3) = ...
-            cell_prtcls(1:N_t,L+1); % Cells that are internalised
+    if mod(tstep, tsteps_per_hour) == 0
+        cell_c_o_p(1:N_tstep,tstep/tsteps_per_hour+1,1) = ...
+            cell_prtcls(1:N_tstep,1); % Particles that are free AND hit
+        cell_c_o_p(1:N_tstep,tstep/tsteps_per_hour+1,2) = ...
+            sum(cell_prtcls(1:N_tstep,2:L),2); % Particles that interact
+        cell_c_o_p(1:N_tstep,tstep/tsteps_per_hour+1,3) = ...
+            cell_prtcls(1:N_tstep,L+1); % Particles that are internalised
     end
     
     % Record the cell phases at each timestep
-    cell_phase_history(1:N_t,t+1) = cell_phases(1:N_t)';
+    cell_phase_history(1:N_tstep,tstep+1) = cell_phases(1:N_tstep)';
     
     % Record the cell population at each timestep
-    population(t+1) = N_t;
+    cell_population(tstep+1) = N_tstep;
     
 end
 
@@ -355,21 +414,21 @@ end
 if PARAMETERS.visual
     % Play movie
     petri_fig.Visible = 'on';
-    movie(petri_fig, petri_movie, 1, PARAMETERS.speed);
+    movie(petri_fig, petri_movie, 1, PARAMETERS.vid_speed);
 end
 
 % Calculate average class of particles per timestep (average_c_o_p)
-average_c_o_p = zeros(3,t+1);
+average_c_o_p = zeros(3,tstep+1);
 for row = 1:3
-    average_c_o_p(row,:) = tally_prtcls(row,1:t+1)./population(1:t+1);
+    average_c_o_p(row,:) = tally_prtcls(row,1:tstep+1)./cell_population(1:tstep+1);
 end
 
 % Save evolution information into a structure
-EVOLUTION_INFO = struct('cell_population', population(1:t+1), ...
-    'cell_lineage', cell_lineage(1:N_t,:), ...
-    'cell_phase_history', cell_phase_history(1:N_t,1:t+1),...
-    'average_c_o_p', average_c_o_p(:,1:t+1), ...
-    'cell_c_o_p', cell_c_o_p(1:N_t,:,:), ...
+EVOLUTION_INFO = struct('cell_population', cell_population(1:tstep+1), ...
+    'cell_lineage', cell_lineage(1:N_tstep,:), ...
+    'cell_phase_history', cell_phase_history(1:N_tstep,1:tstep+1),...
+    'average_c_o_p', average_c_o_p(:,1:tstep+1), ...
+    'cell_c_o_p', cell_c_o_p(1:N_tstep,:,:), ...
     'count_catch', count_catch);
 end
 
@@ -398,16 +457,16 @@ NEW_SITE = sub2ind([DIM,DIM], new_row_col(1), new_row_col(2));
 end
 
 
-function draw_frame(N_T, DIM, T, L, MAX_PRTCL, CELL_SITES, CELL_PHASES, ...
-    CELL_PRTCLS, VISUAL, SIZ_CELL)
+function draw_frame(N_TSTEP, DIM, TSTEP, L, MAX_PRTCL, CELL_SITES, ...
+    CELL_PHASES, CELL_PRTCLS, VISUAL, TSTEP_DURATION)
 % DRAW_FRAME Save each figure as a frame in the movie illustrating the 
 % evolution of the culture dish as cells move, proliferate and internalise
 % particles.
 
 [rows, cols] = ind2sub(DIM, CELL_SITES);
-rows_um = rows * SIZ_CELL;
-cols_um = cols * SIZ_CELL;
-dim_um = DIM * SIZ_CELL;
+rows_um = rows * CELL_DIAM; % (micrometers)
+cols_um = cols * CELL_DIAM; % (micrometers)
+dim_um = DIM * CELL_DIAM; % (micrometers)
 siz_phase = 10*CELL_PHASES; % Sizes of cell depend on cell phase
 
 if VISUAL == 1 
@@ -420,7 +479,7 @@ if VISUAL == 1
     col_cell = [1 0 0];
     % Transparency of cell colour depends on number of internalised particles
     transp_cell = CELL_PRTCLS(:,end)/MAX_PRTCL;
-    for cell = 1:N_T
+    for cell = 1:N_TSTEP
         % Width of edge of cell depends on number of interacting particles
         if L == 1 || sum(CELL_PRTCLS(cell,2:end - 1)) == 0
             wid_edge = 0.1;
@@ -443,18 +502,18 @@ else
     %       size of cell indicating phase of cell proliferation cycle
     %       pink opacity of cell colour indicating number of internalised particles
     %       acqua opacity of cell colour indicating number of interacting particles
-    c = [1-sum(CELL_PRTCLS(1:N_T,2:end - 1),2)./100 ... % interacting particles
-        1-(CELL_PRTCLS(1:N_T,end)./MAX_PRTCL) ...% particles internalised
-        ones(N_T,1)]; % to ensure that no particles gives white
-    scatter(cols_um(1:N_T), dim_um - rows_um(1:N_T) + 1, ...
-        siz_phase(1:N_T), c, 'filled', 'MarkerEdgeColor', 'k'); 
+    c = [1-sum(CELL_PRTCLS(1:N_TSTEP,2:end - 1),2)./prtcls_per_cell ... % interacting particles
+        1-(CELL_PRTCLS(1:N_TSTEP,end)./prtcls_per_cell) ...% particles internalised
+        ones(N_TSTEP,1)]; % to ensure that no particles gives white
+    scatter(cols_um(1:N_TSTEP), dim_um - rows_um(1:N_TSTEP) + 1, ...
+        siz_phase(1:N_TSTEP), c, 'filled', 'MarkerEdgeColor', 'k'); 
 end
 
-xlim([0.5*SIZ_CELL dim_um+0.5*SIZ_CELL]); 
-ylim([0.5*SIZ_CELL dim_um+0.5*SIZ_CELL]);
+xlim([0.5*CELL_DIAM dim_um+0.5*CELL_DIAM]); 
+ylim([0.5*CELL_DIAM dim_um+0.5*CELL_DIAM]);
 xlabel('$x (\mu m)$', 'Interpreter', 'latex');
 ylabel('$y (\mu m)$', 'Interpreter', 'latex');
-title(sprintf('timestep = %d',T));
+title(sprintf('time = %d',TSTEP*TSTEP_DURATION));
 drawnow
 end
 
