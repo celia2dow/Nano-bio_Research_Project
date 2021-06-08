@@ -41,7 +41,7 @@
 %                                   interaction stage and rows indicating
 %                                   cell phase. Elements must be greater than
 %                                   or equal to tstep_duration. They should
-%                                   add up, along with 1/rate_diffusivity,
+%                                   add up, along with 1/rate_prtcl_diffusivity,
 %                                   to give the expected waiting time for
 %                                   internalisation of 1 particle.
 %       prob_inherit                The probability of a daughter cell born 
