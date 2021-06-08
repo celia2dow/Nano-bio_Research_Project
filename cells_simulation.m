@@ -174,9 +174,7 @@ if PARAMETERS.visual
     petri_fig.Visible = 'off';
     
     % Save first movie frame (the initial culture dish).
-    draw_frame(N_tstep, PARAMETERS.dim, tstep, L, PARAMETERS.max_prtcl, ...
-        cell_sites, cell_phases, cell_prtcls, PARAMETERS.visual, ...
-        PARAMETERS.cell_diam, PARAMETERS.tstep_duration)
+    draw_frame(PARAMETERS,N_tstep, tstep, L, cell_sites, cell_phases, cell_prtcls)
     petri_movie(tstep+1) = getframe(petri_fig);
 end
 
@@ -294,6 +292,7 @@ while tstep < total_tsteps && ~all(tally_prtcls(:,tstep+1) == [0; ...
         end
     end
 
+
     %%% CELL PROLIFERATION CYCLE %%%
     
     N_tstep_static = N_tstep; % keep N_tstep fixed for the attempted prolif. events
@@ -384,9 +383,7 @@ while tstep < total_tsteps && ~all(tally_prtcls(:,tstep+1) == [0; ...
         clf
         % Save each figure as a frame in the movie illustrating the evolution
         % of the culture dish
-        draw_frame(N_tstep, PARAMETERS.dim, tstep, L, PARAMETERS.max_prtcl,...
-            cell_sites, cell_phases, cell_prtcls, PARAMETERS.visual,...
-            PARAMETERS.cell_diam)
+        draw_frame(PARAMETERS,N_tstep, tstep, L, cell_sites, cell_phases, cell_prtcls)
         petri_movie(tstep+1) = getframe(petri_fig);
     end
     
@@ -457,19 +454,18 @@ NEW_SITE = sub2ind([DIM,DIM], new_row_col(1), new_row_col(2));
 end
 
 
-function draw_frame(N_TSTEP, DIM, TSTEP, L, MAX_PRTCL, CELL_SITES, ...
-    CELL_PHASES, CELL_PRTCLS, VISUAL, TSTEP_DURATION)
+function draw_frame(PARAMETERS,N_TSTEP, TSTEP, L, CELL_SITES, CELL_PHASES, CELL_PRTCLS)
 % DRAW_FRAME Save each figure as a frame in the movie illustrating the 
 % evolution of the culture dish as cells move, proliferate and internalise
 % particles.
 
-[rows, cols] = ind2sub(DIM, CELL_SITES);
-rows_um = rows * CELL_DIAM; % (micrometers)
-cols_um = cols * CELL_DIAM; % (micrometers)
-dim_um = DIM * CELL_DIAM; % (micrometers)
+[rows, cols] = ind2sub(PARAMETERS.dim, CELL_SITES);
+rows_um = rows * PARAMETERS.cell_diam; % (micrometers)
+cols_um = cols * PARAMETERS.cell_diam; % (micrometers)
+dim_um = PARAMETERS.dim * PARAMETERS.cell_diam; % (micrometers)
 siz_phase = 10*CELL_PHASES; % Sizes of cell depend on cell phase
 
-if VISUAL == 1 
+if PARAMETERS.visual == 1 
     %%% Slower, more comprehensive visual %%%
     
     % Draw a scatter plot of the culture dish with:
@@ -478,7 +474,7 @@ if VISUAL == 1
     %       width of cell outline indicating number of interacting particles
     col_cell = [1 0 0];
     % Transparency of cell colour depends on number of internalised particles
-    transp_cell = CELL_PRTCLS(:,end)/MAX_PRTCL;
+    transp_cell = CELL_PRTCLS(:,end)/PARAMETERS.max_prtcl;
     for cell = 1:N_TSTEP
         % Width of edge of cell depends on number of interacting particles
         if L == 1 || sum(CELL_PRTCLS(cell,2:end - 1)) == 0
@@ -502,18 +498,18 @@ else
     %       size of cell indicating phase of cell proliferation cycle
     %       pink opacity of cell colour indicating number of internalised particles
     %       acqua opacity of cell colour indicating number of interacting particles
-    c = [1-sum(CELL_PRTCLS(1:N_TSTEP,2:end - 1),2)./prtcls_per_cell ... % interacting particles
-        1-(CELL_PRTCLS(1:N_TSTEP,end)./prtcls_per_cell) ...% particles internalised
+    c = [1-sum(CELL_PRTCLS(1:N_TSTEP,2:end - 1),2)./PARAMETERS.prtcls_per_cell ... % interacting particles
+        1-(CELL_PRTCLS(1:N_TSTEP,end)./PARAMETERS.prtcls_per_cell) ...% particles internalised
         ones(N_TSTEP,1)]; % to ensure that no particles gives white
     scatter(cols_um(1:N_TSTEP), dim_um - rows_um(1:N_TSTEP) + 1, ...
         siz_phase(1:N_TSTEP), c, 'filled', 'MarkerEdgeColor', 'k'); 
 end
 
-xlim([0.5*CELL_DIAM dim_um+0.5*CELL_DIAM]); 
-ylim([0.5*CELL_DIAM dim_um+0.5*CELL_DIAM]);
+xlim([0.5*PARAMETERS.cell_diam dim_um+0.5*PARAMETERS.cell_diam]); 
+ylim([0.5*PARAMETERS.cell_diam dim_um+0.5*PARAMETERS.cell_diam]);
 xlabel('$x (\mu m)$', 'Interpreter', 'latex');
 ylabel('$y (\mu m)$', 'Interpreter', 'latex');
-title(sprintf('time = %d',TSTEP*TSTEP_DURATION));
+title(sprintf('time = %3.1f hours',TSTEP*PARAMETERS.tstep_duration));
 drawnow
 end
 
