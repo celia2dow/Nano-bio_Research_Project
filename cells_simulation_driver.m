@@ -208,7 +208,7 @@ for time_plot = 1:floor(PARAMETERS.simulation_duration)+1
     S2c(S2c==0)=realmin; % So that 0 is not passed through log
     %S1c = S1c/S1_max; % To normalise so that it's between 0 and 1
     %S2c = S2c/S2_max; % To normalise so that it's between 0 and 1
-    c = ksdensity([log(S1c),log(S2c)], [log(S2c),log(S1c)]);
+    c = ksdensity([log10(S1c),log10(S2c)], [log10(S2c),log10(S1c)]);
     dot_size = 3*ones(length(S1),1);
     scatter(S1, S2, dot_size, c, 'filled');
     set(gca, 'YScale', 'log','Xscale', 'log','XMinorTick','on','YMinorTick','on');
