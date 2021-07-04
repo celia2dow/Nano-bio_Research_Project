@@ -3,7 +3,7 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 % in a 2.D cell monolayer within a culture dish as they interact with and
 % internalised particles.
 %
-%   This is the work of Celia Dowling 8/6/21
+%   This is the work of Celia Dowling 2/7/21
 %
 %   The input argument is a structure PARAMETERS containing the fields:
 %
@@ -33,19 +33,27 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 %                                   particle to transition out of each
 %                                   stage in the cell-particle interaction 
 %                                   model. Can be 1 EWT per stage (e.g. 
-%                                   mean time spent free or in stage 0 
-%                                   once having hit a cell, mean time spent 
-%                                   in stage 1, ..., mean time spent in stage 
-%                                   L-1 before transitioning into stage L i.e. 
-%                                   being internalised) or can be 1 EWT per
-%                                   stage per cell phase; columns indicating
-%                                   interaction stage and rows indicating
-%                                   cell phase. Elements must be greater than
-%                                   or equal to tstep_duration. They should
-%                                   add up, along with 1/rate_prtcl_diffusivity,
-%                                   to give the expected waiting time for
-%                                   internalisation of 1 particle.
-%       max_prtcls                 The particle capacities of each of the
+%                                   mean time spent free and unbound, mean 
+%                                   time spent in stage 1 (bound), mean time
+%                                   spent in stage 2, ..., mean time spent 
+%                                   in stage L-1 before transitioning into 
+%                                   stage L i.e. being internalised) or can 
+%                                   be 1 EWT per stage per cell phase; columns 
+%                                   indicating interaction stage and rows 
+%                                   indicating cell phase. Elements must be 
+%                                   greater than or equal to tstep_duration. 
+%                                   For a petri dish saturated with cells:
+%                                   Given a certain percentage association 
+%                                   over 24 hours (a), choose EWFs_internalise(1) 
+%                                   such that the CDF of the exponential
+%                                   distribution with that rate satisfies
+%                                   F(24)=a. Given a certain percentage
+%                                   internalisation over 24 hours (i),
+%                                   choose all other EWFs_internalise rates
+%                                   such that the CDF of the hypo- 
+%                                   exponential distribution with these
+%                                   rates satisfy F(24)=i.
+%       max_prtcls                  The particle capacities of each of the
 %                                   L cell-particle interaction model
 %                                   stages (i.e., capacity of stage 1, ...,
 %                                   capacity of stage L). If a stage has 
@@ -57,9 +65,9 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 %                                   into the site of the parent cell 
 %                                   inheriting 1 particle from the parent
 %                                   cell.
-%       rate_prtcl_diffusivity (per tstep) The rate at which particles interact  
+%       rate_prtcl_diffusivity (per hour) The rate at which particles interact  
 %                                   with a given cell (fraction of free particles
-%                                   per timestep), reflecting the diffusivity 
+%                                   per hour that hit), reflecting the diffusivity 
 %                                   of the particle type.
 %       vid_speed (frames per sec)  Speed of movie frame playback.
 %       visual                      The form of visualisation desired which 
@@ -93,13 +101,18 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 %       count_catch         The number of times the catch (ensuring no more
 %                           particles are internalised than the carrying
 %                           capacity allows for) is used.
-
+%
+%   The simulation also generates and saves a gif of the visual petri dish
+%   animation, if one is created, in the folder path specified.
 
 
 %%% CONVERT EXPECTED WAITING TIMES INTO RATES PER TSTEP %%%
 
 % Rate at which a cell moves.
 rate_move = PARAMETERS.tstep_duration/PARAMETERS.EWT_move;
+
+% Rate of particle diffusivity (i.e. of particle hitting).
+rate_diffus = PARAMETERS.tstep_duration*PARAMETERS.rate_prtcl_diffusivity;
 
 % A list of K rates of cells transitioning between phases in the cell 
 % proliferation cycle (e.g. phase 1 to phase 2, phase 2 to phase 3, ..., 
@@ -115,6 +128,9 @@ K = length(rates_proliferate);
 % transition - columns inicate interaction stage and rows indicate cell
 % phase.
 rates_internalise = PARAMETERS.tstep_duration./PARAMETERS.EWTs_internalise;
+% Convert the first rate from the rate of binding per timestep to the
+% probability of binding once hit by dividing by the rate of hitting.
+rates_internalise(:,1) = rates_internalise(:,1)./rate_diffus;
 % Check how many stages in the cell-particle interactions model there are
 % and whether or not the user has defined different rates for different
 % cell-proliferation phases (matrix input) or not (vector input).
@@ -224,22 +240,25 @@ while tstep < total_tsteps && ~all(tally_prtcls(:,tstep+1) == [0; ...
     end
     
     % We draw the number of free particles that hit a cell and attempt to
-    % interact with it (i.e. that are available in stage 0 of the cell-
-    % particle interaction model) from a Binomial distribution where the
-    % probability of a successful event = rate_prtcl_diffusivity and the 
-    % number of trials = the number of particles hovering on the lattice 
+    % bind to it (i.e. that are available in stage 0 of the cell-particle
+    % interaction model) from a Binomial distribution where the probability
+    % of a successful event = rate_prtcl_diffusivity * tstep_duration and 
+    % the number of trials = the number of particles hovering on the lattice 
     % site (i.e. currently in the first column of our cell_prtcls array).
-    cell_prtcls(1:N_tstep,1) = binornd(cell_prtcls(1:N_tstep,1),...
-        PARAMETERS.rate_prtcl_diffusivity);
+    cell_prtcls(1:N_tstep,1) = binornd(cell_prtcls(1:N_tstep,1),rate_diffus);
    
     % Now that every column of the cell_prtcls array represents the
     % population of particles in a stage of interaction with the indexed
-    % cell (stage 0 to stage L), we can simply use another binomial
-    % distribution to find how many transition to the next stage, but this
-    % time using the dynamic rate of transition dependent on the number of
-    % particles in the following stage (relative to the carrying capacity
-    % of that following stage) to determine how many in each stage are
-    % successful in graduating to the next stage.
+    % cell (stage 0 or hit to stage L or internalised), we can simply use 
+    % another binomial distribution to find how many transition to the next 
+    % stage, but this time using the dynamic rate of transition dependent 
+    % on the number of particles in the following stage (relative to the 
+    % carrying capacity of that following stage) to determine how many in 
+    % each stage are successful in graduating to the next stage. Note that
+    % those that successfully transition from stage 0 (hit) to stage 1
+    % (bound) remain in stage 1, and those that don't succeed go back to
+    % being free particles. I.e., particles that hit have a probability of
+    % binding and otherwise move away from the cell again.
     for stage = 1:L
         current_carrying_total = cell_prtcls(1:N_tstep,stage+1);
         % Check if internalisation rates have been defined per cell 
@@ -251,7 +270,7 @@ while tstep < total_tsteps && ~all(tally_prtcls(:,tstep+1) == [0; ...
                 stage) .* (1-current_carrying_total./PARAMETERS.max_prtcls(stage));      
         else % Not dependent on phase
             dynamic_prtcl_rates =  rates_internalise(stage) .* (1-...
-                current_carrying_total./PARAMETERS.max_prtcls(stage) .* ones(N_tstep,1));
+                current_carrying_total./PARAMETERS.max_prtcls(stage));
         end
         % Due to wanting to keep the total number of particles allowed to
         % transition from a stage in one timestep static in spite of 
