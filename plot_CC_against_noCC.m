@@ -2,7 +2,7 @@
 % previous runs with and without carrying capacity included, and plots the 
 % association/internalisation curves against one another.
 %
-%   This is the work of Celia Dowling 19/01/22
+%   This is the work of Celia Dowling 03/02/22
 
 clear
 close all
@@ -10,10 +10,35 @@ close all
 fig22=figure(22);
 set(fig22, 'Visible', 'off');
 tol_diffCases = 1E-2;
+choose = "diffs"; %"distrib"
+
+% Hypoexponential CDF - Internalised 
+F_hypoexp = @(t,lambda1,lambda2,num_prtcls) (1 - 1./(lambda2-lambda1) .* ...
+    (lambda2 .* exp(-lambda1 .* t) - ...
+    lambda1 .* exp(-lambda2 .* t))) .* num_prtcls;
+
+% Hypoexponential PDF - Internalised
+f_hypoexp = @(t,lambda1,lambda2,num_prtcls) lambda1 .* lambda2 .* num_prtcls ...
+    ./(lambda1 - lambda2) .* (exp(-lambda2 .* t) - exp(-lambda1 .* t));
+
+% Exponential CDF - Associated
+F_exp = @(t,lambda1,num_prtcls) (1 - exp(-lambda1 .* t)) .* num_prtcls;
+
+% Difference CDF - Interacting
+F_diff = @(t,lambda1,lambda2,num_prtcls) lambda1 .* num_prtcls ./(lambda2-lambda1) .* ...
+    (exp(-lambda1 .* t) - exp(-lambda2 .* t));
 
 % First load in all of the data for the case without CC
-load('variables_1000pPerC_noCC_0.3_0.5.mat')
+load('variables_1000pPerC_CCInf_0.05_0.03_20222484436.mat')
 close(figure(1),figure(2),figure(3));
+
+if choose == "distrib"
+    l1_noCC = mean(est_lambda1.MLE); 
+    l2_noCC = est_lambda2.distrib_mean; 
+elseif choose == "diffs"
+    l1_noCC = mean(est_lambda1.using_diffs);
+    l2_noCC = est_lambda2.diffs_mean;
+end
 
 % Save thhe average internalised numbers without CC
 internalised_cases = [means(2,:); zeros(1,length(means(2,:)))];
@@ -30,8 +55,18 @@ patch([binrng fliplr(binrng)], [upper1(3,:) fliplr(lower1(3,:))], [.5 0 .5], 'Fa
 hold off
 
 % Second load in all of the data for the case with CC
-load('variables_1000pPerC_CC100_0.3_0.5.mat')
+load('variables_1000pPerC_CC100_0.05_0.03_202223224619.mat')
 close(figure(1),figure(2),figure(3));
+
+if choose == "distrib"
+    l1_CC = mean(est_lambda1.MLE); 
+    l2_CC = est_lambda2.distrib_mean; 
+    CC = mean(est_CC.using_lambda2_diffs(12/PARAMETERS.tstep_duration + 1:end));
+elseif choose == "diffs"
+    l1_CC = mean(est_lambda1.using_diffs);
+    l2_CC = est_lambda2.diffs_mean;
+    CC = mean(est_CC.using_diffs(12/PARAMETERS.tstep_duration + 1:end));
+end
 
 % Save thhe average internalised numbers with CC
 internalised_cases(2,:) = means(2,:);
@@ -46,7 +81,32 @@ plot(binrng,means(3,:),'Color',[0.6 0 0.9],'LineStyle', '--')
 patch([binrng fliplr(binrng)], [upper1(1,:) fliplr(lower1(1,:))], [0.2 0.5 1], 'FaceAlpha', 0.1, 'EdgeColor', 'w', 'LineStyle', ':')
 patch([binrng fliplr(binrng)], [upper1(2,:) fliplr(lower1(2,:))], [0.9 0 0.6], 'FaceAlpha', 0.1, 'EdgeColor', 'w', 'LineStyle', ':')
 patch([binrng fliplr(binrng)], [upper1(3,:) fliplr(lower1(3,:))], [0.6 0 0.9], 'FaceAlpha', 0.1, 'EdgeColor', 'w', 'LineStyle', ':')
-hold off
+
+
+% Plot the theoretical distributions without CC
+assoc_noCC = F_exp(binrng,l1_noCC,PARAMETERS.prtcls_per_cell);
+internal_noCC = F_hypoexp(binrng,l1_noCC,l2_noCC,PARAMETERS.prtcls_per_cell);
+interact_noCC = F_diff(binrng,l1_noCC,l2_noCC,PARAMETERS.prtcls_per_cell);
+plot(binrng,assoc_noCC,'y');
+plot(binrng,internal_noCC,'y');
+plot(binrng,interact_noCC,'y');
+
+% Plot the theoretical distributions with CC
+assoc_CC = F_exp(binrng,l1_CC,PARAMETERS.prtcls_per_cell);
+internal_CC = zeros(1,length(binrng));
+pdf = zeros(1,length(binrng));
+pdf(1) = F_hypoexp(0,l1_CC,l2_CC,PARAMETERS.prtcls_per_cell);
+internal_CC(1) = pdf(1);
+for i = 2:length(binrng)
+    l2_dyn = l2_CC*(1-internal_CC(i-1)/CC);
+    pdf(i) = f_hypoexp(binrng(i),l1_CC,l2_dyn,PARAMETERS.prtcls_per_cell);
+    internal_CC(i) = internal_CC(i-1)+pdf(i);
+end
+internal_CC = F_hypoexp(binrng,l1_CC,est_lambda2.distrib,PARAMETERS.prtcls_per_cell);
+interact_CC = assoc_CC - internal_CC;
+plot(binrng,assoc_CC,'y--');
+plot(binrng,internal_CC,'y--');
+plot(binrng,interact_CC,'y--');
 
 % Details of the plot
 ylim([0 max(upper1,[],'all')])
@@ -54,6 +114,8 @@ legend('Internalised without CC','Interacting without CC','Associated (either) w
     'Std. dev. btwn all cells & runs without CC', '" "', '" "', ...
     'Internalised with CC','Interacting with CC','Associated (either) with CC',...
     'Std. dev. btwn all cells & runs with CC', '" "', '" "', ...
+    'Theoretical distributions from estimates without CC', '" "', '" "', ...
+    'Theoretical distributions from estimates with CC', '" "', '" "', ...
     'Location','Best')
 title('Average number of particles associated per cell')
 subtitle('With and without carrying capacity (CC)')
