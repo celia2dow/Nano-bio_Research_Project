@@ -3,7 +3,7 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 % in a 2.D cell monolayer within a culture dish as they interact with and
 % internalised particles.
 %
-%   This is the work of Celia Dowling 2/7/21
+%   This is the work of Celia Dowling 03/02/22
 %
 %   The input argument is a structure PARAMETERS containing the fields:
 %
@@ -15,9 +15,9 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 %       prtcls_per_cell             Number of particles added to the cell
 %                                   monolayer per cell
 %       cell_diam (micrometers)     Average diameter of particlular cell-type. 
-%       dim (cell diameters)        Lattice dimensions are dim by dim.
+%       culture_dim (cell diameters) Lattice dimensions are culture_dim by culture_dim.
 %       EWT_move (hours)            Expected waiting time for one cell to 
-%                                   move 1 cell diameter. Must begreater than
+%                                   move 1 cell diameter. Must be greater than
 %                                   or equal to tstep_duration.
 %       EWTs_proliferate (hours)    List of K expected waiting times for 1
 %                                   cell to transition out of each phase in
@@ -29,30 +29,46 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 %                                   tstep_duration. They should add up to
 %                                   give the expected waiting time for
 %                                   proliferation.
-%       EWFs_internalise (hours)    List of L expected waiting times for 1
-%                                   particle to transition out of each
-%                                   stage in the cell-particle interaction 
-%                                   model. Can be 1 EWT per stage (e.g. 
-%                                   mean time spent free and unbound, mean 
-%                                   time spent in stage 1 (bound), mean time
-%                                   spent in stage 2, ..., mean time spent 
-%                                   in stage L-1 before transitioning into 
-%                                   stage L i.e. being internalised) or can 
-%                                   be 1 EWT per stage per cell phase; columns 
-%                                   indicating interaction stage and rows 
-%                                   indicating cell phase. Elements must be 
-%                                   greater than or equal to tstep_duration. 
+%       EWTs_internalise.input_type Contains information about how to 
+%                                   calculate the L expected waiting times 
+%                                   for 1 particle to transition out of 
+%                                   each stage in the cell-particle 
+%                                   interaction model. input_type will be 
+%                                   either "fraction" or "EWT"
+%       EWTs_internalise.values     if input_type == "fraction":
+%                                       [fraction associated, fraction
+%                                       internalised, number of hours of 
+%                                       incubation after which these
+%                                       fractions are desired to be
+%                                       observed] ... at confluence without
+%                                       carrying capacity
+%                                   if input_type == "EWT":
+%                                       e.g. [free or stage 0 (hit), stage 
+%                                       1 (bound), ..., stage L-1] (hours) 
+%                                       ... List of L expected waiting 
+%                                       times. Can be 1 EWT per  stage 
+%                                       (e.g. mean time spent free and 
+%                                       unbound, mean time spent in stage 1  
+%                                       (bound), mean time spent in stage 
+%                                       2, ..., mean time spent in stage 
+%                                       L-1 before transitioning into stage
+%                                       L i.e. being internalised) OR can 
+%                                       be 1 EWT per stage per cell phase; 
+%                                       columns indicating interaction 
+%                                       stage and rows indicating cell 
+%                                       phase. Elements must be greater 
+%                                       than or equal to tstep_duration. 
 %                                   For a petri dish saturated with cells:
 %                                   Given a certain percentage association 
-%                                   over 24 hours (a), choose EWFs_internalise(1) 
+%                                   over 24 hours (a), choose values(1) 
 %                                   such that the CDF of the exponential
 %                                   distribution with that rate satisfies
 %                                   F(24)=a. Given a certain percentage
 %                                   internalisation over 24 hours (i),
-%                                   choose all other EWFs_internalise rates
-%                                   such that the CDF of the hypo- 
-%                                   exponential distribution with these
-%                                   rates satisfy F(24)=i.
+%                                   choose all other values rates such that
+%                                   the CDF of the hypo-exponential 
+%                                   distribution with these rates satisfy 
+%                                   F(24)=i.
 %       max_prtcls                  The particle capacities of each of the
 %                                   L cell-particle interaction model
 %                                   stages (i.e., capacity of stage 1, ...,
@@ -65,10 +81,11 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 %                                   into the site of the parent cell 
 %                                   inheriting 1 particle from the parent
 %                                   cell.
-%       rate_prtcl_diffusivity (per hour) The rate at which particles interact  
-%                                   with a given cell (fraction of free particles
-%                                   per hour that hit), reflecting the diffusivity 
-%                                   of the particle type.
+%       temp (degrees celsius)      Temperature of the cell culture
+%       viscos (kg / (m*s))         (Dynamic) viscosity of the cell culture
+%                                   medium
+%       prtcl_rad (nanometers)      The average radius of the nanoparticle 
+%                                   type.
 %       vid_speed (frames per sec)  Speed of movie frame playback.
 %       visual                      The form of visualisation desired which 
 %                                   can be 0,1 or 2:
@@ -89,18 +106,16 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 %                           [parent cell, daughter cell, generation at 0 hours,
 %                           generation at 6 hours, generation at 12 hours, etc.]
 %       cell_phase_history  A record of the cell phases over time.
-%       average_c_o_p       A record of the average class of particles over 
-%                           time; the number that have not been internalised 
-%                           by or bound to cells (i.e free particles),
-%                           the number of interacting particles and that of
-%                           internalised particles.
 %       cell_c_o_p          A 3D array recording the class of particles
 %                           (free AND hit, interacting, internalised) on
-%                           a cellular basis after a particular amount of
-%                           time (e.g 1 hour, half an hour).
+%                           a cellular basis at each timestep.
 %       count_catch         The number of times the catch (ensuring no more
 %                           particles are internalised than the carrying
 %                           capacity allows for) is used.
+%       cell_pair_cor_coef  The coefficient of pair correlation for each
+%                           timestep which describes the spatial dependence
+%                           of the probability of one lattice site being 
+%                           occupied (unity implies independence)
 %
 %   The simulation also generates and saves a gif of the visual petri dish
 %   animation, if one is created, in the folder path specified.
@@ -112,7 +127,16 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 rate_move = PARAMETERS.tstep_duration/PARAMETERS.EWT_move;
 
 % Rate of particle diffusivity (i.e. of particle hitting).
-rate_diffus = PARAMETERS.tstep_duration*PARAMETERS.rate_prtcl_diffusivity;
+% Use Stokes-Einstein equation:
+k_B = 1.380649E-23; % Boltzmann constant
+T_K = PARAMETERS.temp + 273.15; % Temperature in kelvin
+r_m = PARAMETERS.prtcl_rad * (10E-9); % Particle radius in meters
+A_cell = pi * (PARAMETERS.cell_diam * 10E-6/2)^2; % 2D area of cell
+eta = PARAMETERS.viscos;
+rate_diffus = k_B * T_K / (6 * pi * eta * r_m); % In m^2 per second
+rate_diffus = rate_diffus * (60^2); % In m^2 per hour
+rate_diffus = PARAMETERS.tstep_duration*rate_diffus; % In m^2 per timestep
+rate_diffus = rate_diffus / A_cell; % In per timestep
 
 % A list of K rates of cells transitioning between phases in the cell 
 % proliferation cycle (e.g. phase 1 to phase 2, phase 2 to phase 3, ..., 
@@ -121,13 +145,27 @@ rates_proliferate = PARAMETERS.tstep_duration./PARAMETERS.EWTs_proliferate;
 % The number of phases in the cell proliferation cycle.
 K = length(rates_proliferate); 
 
-% A list of L rates of particles transitioning between stages of the cell-
-% particle interaction model unaffected by carrying capacity (e.g. free to 
-% stage 1, stage 1 to stage 2, ..., stage L-1 to stage L or internalised).
-% Can be 1 rate per transition or can be 1 rate per cell phase per
-% transition - columns inicate interaction stage and rows indicate cell
-% phase.
-rates_internalise = PARAMETERS.tstep_duration./PARAMETERS.EWTs_internalise;
+% Check to see if the desired association/internalisation fractions were
+% given or the EWTs directly:
+if PARAMETERS.EWTs_internalise.input_type == "EWT"
+    % A list of L rates of particles transitioning between stages of the cell-
+    % particle interaction model unaffected by carrying capacity (e.g. free to 
+    % stage 1, stage 1 to stage 2, ..., stage L-1 to stage L or internalised).
+    % Can be 1 rate per transition or can be 1 rate per cell phase per
+    % transition - columns inicate interaction stage and rows indicate cell
+    % phase.
+    rates_internalise = PARAMETERS.tstep_duration./...
+        PARAMETERS.EWTs_internalise.values;
+elseif PARAMETERS.EWTs_internalise.input_type == "fraction"
+    % Calculate the rates from the desired observed fraction
+    % associated/internalised at confluence without carrying capacity.
+    [l1,l2] = input_EWT_from_fraction( ...
+        PARAMETERS.EWTs_internalise.values(1), ...
+        PARAMETERS.EWTs_internalise.values(2), ...
+        PARAMETERS.EWTs_internalise.values(3));
+    rates_internalise = PARAMETERS.tstep_duration.*[l1,l2];
+end
+
 % Convert the first rate from the rate of binding per timestep to the
 % probability of binding once hit by dividing by the rate of hitting.
 rates_internalise(:,1) = rates_internalise(:,1)./rate_diffus;
@@ -145,17 +183,16 @@ end
 
 N_tstep = PARAMETERS.initial_num_cells; % the number of cells at timestep t
 prtcls_initial = N_tstep * PARAMETERS.prtcls_per_cell; % the number of particles initially
-total_sites = PARAMETERS.dim ^2; % total number of possible positions in petri dish
+total_sites = PARAMETERS.culture_dim ^2; % total number of possible positions in petri dish
 % Number of timesteps of duration tstep_duration that fit into
 % simulation_duration number of hours.
 total_tsteps = floor(PARAMETERS.simulation_duration/PARAMETERS.tstep_duration);
-tsteps_per_hour = 1/PARAMETERS.tstep_duration; % number of timesteps per hour 
 tstep = 0; % the current timestep
 
-% Randomise the positions of initial cells on a dim by dim lattice. From 
-% now on, all arrays with the name suffix 'cell_' correspond in indexing 
+% Randomise the positions of initial cells on a culture_dim by culture_dim lattice. From 
+% now on, all arrays with the name prefix 'cell_' correspond in indexing 
 % with each other. I.e. cell_...(i) corresponds to cell i.
-culture_dish = zeros(PARAMETERS.dim);
+culture_dish = zeros(PARAMETERS.culture_dim);
 cell_sites = zeros(1, total_sites); % preallocate space
 cell_sites(1:N_tstep) = randsample(1:total_sites, N_tstep);
 culture_dish(cell_sites(1:N_tstep))=1; % place cells on culture dish
@@ -175,15 +212,20 @@ successes_in_stage = zeros(total_sites, L);
 % Initialise arrays/constants for EVOLUTION_INFO fields.
 cell_population = [N_tstep zeros(1,total_tsteps)];
 cell_lineage_history = [zeros(N_tstep,1) (1:N_tstep)' ones(N_tstep,2) ...
-    zeros(N_tstep,ceil(PARAMETERS.simulation_duration/6)-1); ...
-    zeros(total_sites,ceil(PARAMETERS.simulation_duration/6)+3)];
+    zeros(N_tstep,ceil(PARAMETERS.simulation_duration*PARAMETERS.tstep_duration)-1); ...
+    zeros(total_sites,ceil(PARAMETERS.simulation_duration*PARAMETERS.tstep_duration)+3)];
 lineage_colmn = 4;
 cell_phase_history = [cell_phases' zeros(total_sites, total_tsteps)]; 
+num_neighs_occ = count_occupied_neighs(PARAMETERS.culture_dim, N_tstep, cell_sites, culture_dish);
+normalising_coeff = 4 * (PARAMETERS.culture_dim^2) * N_tstep * (N_tstep-1)/...
+        ((PARAMETERS.culture_dim^2) * (PARAMETERS.culture_dim^2-1));
+cell_pair_cor_coef = [num_neighs_occ/normalising_coeff zeros(1,total_tsteps)];
 % Record free particles, interacting particles and internalised particles
 % per timestep in system.
 tally_prtcls = [prtcls_initial zeros(1, total_tsteps); zeros(2, total_tsteps + 1)];
 % Record class of particles on a cell basis per hour.
-cell_c_o_p = zeros(total_sites,24+1,3);
+cell_c_o_p = zeros(total_sites,total_tsteps+1,3);
+cell_c_o_p(1:N_tstep,1,1) = PARAMETERS.prtcls_per_cell;
 % The number of times the binomial distribution overdraws particles to
 % internalise.
 count_catch = 0;
@@ -308,7 +350,7 @@ while tstep < total_tsteps && ~all(tally_prtcls(:,tstep+1) == [0; ...
             current_site = datasample(cell_sites(1:N_tstep),1);
             
             % Call local function to choose a new site to move to
-            new_site = choose_adjacent_site(PARAMETERS.dim, current_site);
+            new_site = choose_adjacent_site(PARAMETERS.culture_dim, current_site);
         
             % If the new site is vacant, the cell moves
             if culture_dish(new_site) == 0
@@ -338,7 +380,7 @@ while tstep < total_tsteps && ~all(tally_prtcls(:,tstep+1) == [0; ...
             if old_phase == K
                 % Call local function to choose daughter_site in which to 
                 % attempt to proliferate into (create a daughter cell)
-                daughter_site = choose_adjacent_site(PARAMETERS.dim, parent_site);
+                daughter_site = choose_adjacent_site(PARAMETERS.culture_dim, parent_site);
         
                 % If the new site is vacant, the cell proliferates into it
                 % and returns to the first phase of the cell proliferation
@@ -429,15 +471,13 @@ while tstep < total_tsteps && ~all(tally_prtcls(:,tstep+1) == [0; ...
         imwrite(imind,cm,gifpath,'gif','WriteMode','append')   
     end
     
-    % Record the class of particles on a cell basis every hour
-    if mod(tstep, tsteps_per_hour) == 0
-        cell_c_o_p(1:N_tstep,tstep/tsteps_per_hour+1,1) = ...
-            cell_prtcls(1:N_tstep,1); % Particles that are free AND hit
-        cell_c_o_p(1:N_tstep,tstep/tsteps_per_hour+1,2) = ...
-            sum(cell_prtcls(1:N_tstep,2:L),2); % Particles that interact
-        cell_c_o_p(1:N_tstep,tstep/tsteps_per_hour+1,3) = ...
-            cell_prtcls(1:N_tstep,L+1); % Particles that are internalised
-    end
+    % Record the class of particles on a cell basis every timestep
+    cell_c_o_p(1:N_tstep,tstep+1,1) = ...
+        cell_prtcls(1:N_tstep,1); % Particles that are free OR hit
+    cell_c_o_p(1:N_tstep,tstep+1,2) = ...
+        sum(cell_prtcls(1:N_tstep,2:L),2); % Particles that interact
+    cell_c_o_p(1:N_tstep,tstep+1,3) = ...
+        cell_prtcls(1:N_tstep,L+1); % Particles that are internalised
     
     % Record the cell phases at each timestep
     cell_phase_history(1:N_tstep,tstep+1) = cell_phases(1:N_tstep)';
@@ -445,6 +485,11 @@ while tstep < total_tsteps && ~all(tally_prtcls(:,tstep+1) == [0; ...
     % Record the cell population at each timestep
     cell_population(tstep+1) = N_tstep;
     
+    % Record the pair correlation coefficient of cells at each timestep
+    num_neighs_occ = count_occupied_neighs(PARAMETERS.culture_dim, N_tstep, cell_sites, culture_dish);
+    normalising_coeff = 4 * (PARAMETERS.culture_dim^2) * N_tstep * (N_tstep-1)/...
+        ((PARAMETERS.culture_dim^2) * (PARAMETERS.culture_dim^2-1));
+    cell_pair_cor_coef(tstep+1) = num_neighs_occ/normalising_coeff;
 end
 
 % Print cell particles
@@ -456,31 +501,25 @@ if PARAMETERS.visual
     movie(petri_fig, petri_movie, 1, PARAMETERS.vid_speed);
 end
 
-% Calculate average class of particles per timestep (average_c_o_p)
-average_c_o_p = zeros(3,tstep+1);
-for row = 1:3
-    average_c_o_p(row,:) = tally_prtcls(row,1:tstep+1)./cell_population(1:tstep+1);
-end
-
 % Save evolution information into a structure
 EVOLUTION_INFO = struct('cell_population', cell_population(1:tstep+1), ...
     'cell_lineage_history', cell_lineage_history(1:N_tstep,:), ...
     'cell_phase_history', cell_phase_history(1:N_tstep,1:tstep+1),...
-    'average_c_o_p', average_c_o_p(:,1:tstep+1), ...
     'cell_c_o_p', cell_c_o_p(1:N_tstep,:,:), ...
-    'count_catch', count_catch);
+    'count_catch', count_catch, ...
+    'cell_pair_cor_coef', cell_pair_cor_coef);
 end
 
 
 
 %%% SUBFUNCTIONS %%%
 
-function NEW_SITE = choose_adjacent_site(DIM, CURRENT_SITE)
-% CHOOSE_ADJACENT_SITE Given the CURRENT_SITE in a DIM by DIM lattice, 
+function NEW_SITE = choose_adjacent_site(CULTURE_DIM, CURRENT_SITE)
+% CHOOSE_ADJACENT_SITE Given the CURRENT_SITE in a CULTURE_DIM by CULTURE_DIM lattice, 
 % choose a NEW_SITE that is directly adjacent (up, down, left, right)
 
 % Convert linear indices to [row,column] coordinates 
-[current_row, current_col] = ind2sub(DIM, CURRENT_SITE);
+[current_row, current_col] = ind2sub(CULTURE_DIM, CURRENT_SITE);
         
 % Each selected cell chooses a random direction to move in
 delta = randsample([randsample([-1,1],1),0],2);
@@ -488,11 +527,40 @@ new_row_col = [current_row, current_col] + delta;
             
 % For every cell that pops out of the lattice on one side, another cell
 % pops into the lattice on the opposite side
-new_row_col(new_row_col > DIM) = 1;
-new_row_col(new_row_col < 1) = DIM; 
+new_row_col(new_row_col > CULTURE_DIM) = 1;
+new_row_col(new_row_col < 1) = CULTURE_DIM; 
         
 % Convert [row, column] coordinates to linear indices
-NEW_SITE = sub2ind([DIM,DIM], new_row_col(1), new_row_col(2));
+NEW_SITE = sub2ind([CULTURE_DIM,CULTURE_DIM], new_row_col(1), new_row_col(2));
+end
+
+
+function NUM_OCCUPIED_NEIGHS = count_occupied_neighs(CULTURE_DIM, N_TSTEP, CELL_SITES, CULTURE_DISH)
+% COUNT_OCCUPIED_NEIGHS Given the CELL_SITES which are occupied by cells in
+% a CULTURE_DIM by CULTURE_DIM, lattice, count the number of nearest neighbours to each
+% occupied site that are also occupied.
+NUM_OCCUPIED_NEIGHS = 0;
+    for cell = 1:N_TSTEP
+        [current_row, current_col] = ind2sub(CULTURE_DIM, CELL_SITES(cell));
+        
+        % Find the neighbours of the current site
+        neighs_sub = [current_row, current_col + 1; ...
+            current_row, current_col - 1; ...
+            current_row + 1, current_col; ...
+            current_row - 1, current_col];
+        
+        % Assume the torus shape of the domain and allow for edge and
+        % corner sites to have neighbours on the opposite edges/corners.
+        neighs_sub(neighs_sub>CULTURE_DIM)=1;
+        neighs_sub(neighs_sub<1)=CULTURE_DIM;
+        
+        % Convert [row, column] coordinates to linear indices
+        neighs_ind = sub2ind([CULTURE_DIM,CULTURE_DIM], neighs_sub(:,1), neighs_sub(:,2));
+        
+        % Add to the total the number of neighbours that are occupied
+        cell_neighs = CULTURE_DISH(neighs_ind);
+        NUM_OCCUPIED_NEIGHS = NUM_OCCUPIED_NEIGHS + nnz(cell_neighs);
+    end
 end
 
 
@@ -501,10 +569,10 @@ function draw_frame(PARAMETERS,N_TSTEP, TSTEP, L, CELL_SITES, CELL_PHASES, CELL_
 % evolution of the culture dish as cells move, proliferate and internalise
 % particles.
 
-[rows, cols] = ind2sub(PARAMETERS.dim, CELL_SITES);
+[rows, cols] = ind2sub(PARAMETERS.CULTURE_DIM, CELL_SITES);
 rows_um = rows * PARAMETERS.cell_diam; % (micrometers)
 cols_um = cols * PARAMETERS.cell_diam; % (micrometers)
-dim_um = PARAMETERS.dim * PARAMETERS.cell_diam; % (micrometers)
+culture_dim_um = PARAMETERS.culture_dim * PARAMETERS.cell_diam; % (micrometers)
 siz_phase = 10*CELL_PHASES; % Sizes of cell depend on cell phase
 
 if PARAMETERS.visual == 1
@@ -516,7 +584,11 @@ if PARAMETERS.visual == 1
     %       width of cell outline indicating number of interacting particles
     col_cell = [1 0 0];
     % Transparency of cell colour depends on number of internalised particles
-    transp_cell = CELL_PRTCLS(:,end)/PARAMETERS.max_prtcls(L);
+    if PARAMETERS.max_prtcls(L) == inf
+        transp_cell = CELL_PRTCLS(:,end) .* 0.015;
+    else
+        transp_cell = CELL_PRTCLS(:,end)/PARAMETERS.max_prtcls(L);
+    end
     for cell = 1:N_TSTEP
         % Width of edge of cell depends on number of interacting particles
         if L == 1 || sum(CELL_PRTCLS(cell,2:end - 1)) == 0
@@ -528,27 +600,34 @@ if PARAMETERS.visual == 1
         end 
         % Plot point for cell ensuring the graph represents the lattice 
         % positioning
-        scatter(cols_um(cell), dim_um - rows_um(cell) + 1, siz_phase(cell), ...
+        scatter(cols_um(cell), culture_dim_um - rows_um(cell) + 1, siz_phase(cell), ...
         'MarkerEdgeColor', col_edge, 'MarkerFaceColor', col_cell, ...
         'MarkerFaceAlpha', transp_cell(cell), 'LineWidth', wid_edge);
         hold on
     end
 else
     %%% Faster, less comprehensive visual %%%
-    max_interact = sum(PARAMETERS.max_prtcls(1:L-1),2);
     % Draw a scatter plot of the culture dish with:
-    %       size of cell indicating phase of cell proliferation cycle
-    %       pink opacity of cell colour indicating number of internalised particles
-    %       acqua opacity of cell colour indicating number of interacting particles
-    c = [1-sum(CELL_PRTCLS(1:N_TSTEP,2:end - 1),2)./max_interact, ... % interacting particles
-        1-(CELL_PRTCLS(1:N_TSTEP,end)./PARAMETERS.max_prtcls(L)), ...% particles internalised
-        ones(N_TSTEP,1)]; % to ensure that no particles gives white
-    scatter(cols_um(1:N_TSTEP), dim_um - rows_um(1:N_TSTEP) + 1, ...
+        %       size of cell indicating phase of cell proliferation cycle
+        %       pink opacity of cell colour indicating number of internalised particles
+        %       acqua opacity of cell colour indicating number of interacting particles
+    if any(PARAMETERS.max_prtcls == inf)
+        max_interact = PARAMETERS.prtcls_per_cell .* 0.5;
+        c = [1-sum(CELL_PRTCLS(1:N_TSTEP,2:end - 1),2)./max_interact, ... % interacting particles
+            (1-CELL_PRTCLS(1:N_TSTEP,end)) .* 0.015, ...% particles internalised
+            ones(N_TSTEP,1)]; % to ensure that no particles gives white
+    else
+        max_interact = sum(PARAMETERS.max_prtcls(1:L-1),2);
+        c = [1-sum(CELL_PRTCLS(1:N_TSTEP,2:end - 1),2)./max_interact, ... % interacting particles
+            1-(CELL_PRTCLS(1:N_TSTEP,end)./PARAMETERS.max_prtcls(L)), ...% particles internalised
+            ones(N_TSTEP,1)]; % to ensure that no particles gives white
+    end
+    scatter(cols_um(1:N_TSTEP), culture_dim_um - rows_um(1:N_TSTEP) + 1, ...
         siz_phase(1:N_TSTEP), c, 'filled', 'MarkerEdgeColor', 'k'); 
 end
 
-xlim([0.5*PARAMETERS.cell_diam dim_um+0.5*PARAMETERS.cell_diam]); 
-ylim([0.5*PARAMETERS.cell_diam dim_um+0.5*PARAMETERS.cell_diam]);
+xlim([0.5*PARAMETERS.cell_diam culture_dim_um+0.5*PARAMETERS.cell_diam]); 
+ylim([0.5*PARAMETERS.cell_diam culture_dim_um+0.5*PARAMETERS.cell_diam]);
 xlabel('$x (\mu m)$', 'Interpreter', 'latex');
 ylabel('$y (\mu m)$', 'Interpreter', 'latex');
 title(sprintf('time = %3.1f hours',TSTEP*PARAMETERS.tstep_duration));
@@ -583,4 +662,34 @@ if index>1
 else
     X=0;
 end
+end
+
+
+function [lambda1,lambda2] = input_EWT_from_fraction(frac_associated,...
+    frac_internalised,num_hours)
+% INPUT_EWT_FROM_FRACTION calculates the rates that can be input into
+% cells_simulation.m given the desired fractional association
+% (frac_associated) and the desired fractional internalisation
+% (frac_internalised) after so many hours (num_hours). frac_associated
+% and frac_internalised are numbers between 0 and 1.
+
+% Find lambda1 from the CDF of the exponential distribution, F(t), given
+% that F(num_hours)=frac_associated
+lambda1 = log(1-frac_associated)/(-num_hours); 
+
+% Don't want the root finding function to arrive at lambda1=lambda2
+if 1 >= frac_internalised/(frac_associated^2) % lambda1 >= lambda2
+    guess = lambda1/3;
+else % lambda1 < lambda2
+    guess = 3*lambda1;
+end
+
+% Create a function from the CDF of the hypoexponential distribution, G(t),
+% given that G(num_hours)=frac_internalised and lambda1 is as calculated.
+fun = @(lambda2) 1 - frac_internalised - 1/(lambda2-lambda1) * ...
+    (lambda2 * exp(-lambda1 * num_hours) - ...
+    lambda1 * exp(-lambda2 * num_hours));
+
+% Estimate lambda2 by finding the root of this function (away from lambda1)
+lambda2 = fzero(fun,guess);
 end
