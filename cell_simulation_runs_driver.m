@@ -2,7 +2,7 @@
 % simulation with the specified parameters for a given number of iterations 
 % and produces summary statistics from the numerous runs.
 %
-%   This is the work of Celia Dowling 03/02/22
+%   This is the work of Celia Dowling 04/02/22
 %
 %   The input argument for cells_simulation.m is a structure PARAMETERS 
 %   which has the following fields that need to be defined by the user:
@@ -144,7 +144,7 @@ close all;
 num_runs = 100;
 
 % Choose a tolerance for gradient matching
-tol = 5E-2;
+tol = 1E-1;
 tol_l2 = 5E-4;
 
 PARAMETERS = struct( ...
@@ -158,7 +158,7 @@ PARAMETERS = struct( ...
     'EWTs_proliferate', [4,4,4], ... [4,4,4], ... [phase 1, ..., phase K](hours) 
     'EWTs_internalise', struct('input_type', "fraction", ... "fraction" or "EWT"
     'values', [0.05,0.03,24]), ... see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
-    'max_prtcls', [inf,30], ... [stage 1, ..., stage L]
+    'max_prtcls', [inf,inf], ... [stage 1, ..., stage L]
     'prob_inherit', 0.7, ...     
     'temp', 36, ... (degrees celsius)    
     'viscos', 1.0005E-3,... (kiloggrams / (meter*second))      
@@ -382,7 +382,7 @@ fig8.Position = [100,100,1300,700];
 savefig(fig8, [PARAMETERS.folder_path '\PCC_and_confluence'], 'compact')
 saveas(fig8, [PARAMETERS.folder_path '\PCC_and_confluence'], 'png')
 
-%%
+
 % Use the provided data on the mean numbers of particles per cell that are 
 % free, interacting and internalised and estimate the parameters of the 
 % exponential and hypoexponential distributions that the inter-event times 
@@ -426,9 +426,14 @@ est_lambda1.MLE = smth_assoc(2:end)./ ... % num assoc at end of tstep 1, 2, ...
 est_lambda2.distrib = zeros(1,length(binrng));
 smth_intern = smooth(means(2,:))'; %means(2,:); %
 for i = 1:length(binrng)
-    fun = @(lambda2) 1 - smth_intern(i)./PARAMETERS.prtcls_per_cell - 1/(lambda2-mean(est_lambda1.MLE)) * ...
-        (lambda2 * exp(-mean(est_lambda1.MLE) * binrng(i)) - ...
-        mean(est_lambda1.MLE) * exp(-lambda2 * binrng(i)));
+%     fun = @(lambda2) 1 - smth_intern(i)./PARAMETERS.prtcls_per_cell - 1/(lambda2-mean(est_lambda1.MLE)) * ...
+%         (lambda2 * exp(-mean(est_lambda1.MLE) * binrng(i)) - ...
+%         mean(est_lambda1.MLE) * exp(-lambda2 * binrng(i)));
+    % Hypoexponential PDF - Internalised
+    new_frac_internalised = gradient(means(2,:),PARAMETERS.tstep_duration)./PARAMETERS.prtcls_per_cell;
+    fun = @(lambda2) mean(est_lambda1.MLE) .* lambda2 ./(mean(est_lambda1.MLE) - lambda2) ...
+        .* (exp(-lambda2 .* binrng(i)) - exp(-mean(est_lambda1.MLE) .* binrng(i))) ...
+        - new_frac_internalised(i);
     guess = [mean(est_lambda1.MLE)/3 mean(est_lambda1.MLE)*3];
     % Estimate lambda2 by finding the root of this function (away from lambda1)
     % i.e., by substituting the data into the hypoexponential distribution
@@ -466,6 +471,7 @@ if any(PARAMETERS.max_prtcls ~= inf)
     end
     indices_slight_drop = find(bool_slight_drop);
     tmax_noCC = tsteps(min(indices_slight_drop(indices_slight_drop>(3/PARAMETERS.tstep_duration))));
+    tmax_noCC = max([tmax_noCC, 4]); % Just in case it's too small 
     
     % Limit the timesteps investigated to the tsteps up until this validity
     % limit
@@ -541,7 +547,7 @@ end
 % substitution
 fprintf("Estimates for lambda and EWT from the MLE and hypoexponential distribution: \n")
 disp([mean(est_lambda1.MLE), 1/mean(est_lambda1.MLE)]);
-est_lambda2.distrib_mean = max(est_lambda2.distrib(1/PARAMETERS.tstep_duration:end));
+est_lambda2.distrib_mean = mean(est_lambda2.distrib(1/PARAMETERS.tstep_duration:tmax_noCC/PARAMETERS.tstep_duration));
 % mean(est_lambda2.distrib((1/PARAMETERS.tstep_duration +1):(4/PARAMETERS.tstep_duration +1)));
 disp([est_lambda2.distrib_mean, 1/est_lambda2.distrib_mean]);
 % Print actual rates and EWTs for internalisation
