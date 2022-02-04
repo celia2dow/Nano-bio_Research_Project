@@ -2,7 +2,7 @@
 % previous runs with and without carrying capacity included, and plots the 
 % association/internalisation curves against one another.
 %
-%   This is the work of Celia Dowling 03/02/22
+%   This is the work of Celia Dowling 04/02/22
 
 clear
 close all
@@ -10,7 +10,7 @@ close all
 fig22=figure(22);
 set(fig22, 'Visible', 'off');
 tol_diffCases = 1E-2;
-choose = "diffs"; %"distrib"
+choose = 'distrib'; %'diffs'; %
 
 % Hypoexponential CDF - Internalised 
 F_hypoexp = @(t,lambda1,lambda2,num_prtcls) (1 - 1./(lambda2-lambda1) .* ...
@@ -32,12 +32,13 @@ F_diff = @(t,lambda1,lambda2,num_prtcls) lambda1 .* num_prtcls ./(lambda2-lambda
 load('variables_1000pPerC_CCInf_0.05_0.03_20222484436.mat')
 close(figure(1),figure(2),figure(3));
 
-if choose == "distrib"
-    l1_noCC = mean(est_lambda1.MLE); 
-    l2_noCC = est_lambda2.distrib_mean; 
-elseif choose == "diffs"
-    l1_noCC = mean(est_lambda1.using_diffs);
-    l2_noCC = est_lambda2.diffs_mean;
+switch choose 
+    case {'distrib'}
+        l1_noCC = mean(est_lambda1.MLE); 
+        l2_noCC = est_lambda2.distrib_mean; 
+    case {'diffs'}
+        l1_noCC = mean(est_lambda1.using_diffs);
+        l2_noCC = est_lambda2.diffs_mean;
 end
 
 % Save thhe average internalised numbers without CC
@@ -55,17 +56,18 @@ patch([binrng fliplr(binrng)], [upper1(3,:) fliplr(lower1(3,:))], [.5 0 .5], 'Fa
 hold off
 
 % Second load in all of the data for the case with CC
-load('variables_1000pPerC_CC100_0.05_0.03_202223224619.mat')
+load('variables_1000pPerC_CC30_0.05_0.03_202223225522.mat')
 close(figure(1),figure(2),figure(3));
 
-if choose == "distrib"
-    l1_CC = mean(est_lambda1.MLE); 
-    l2_CC = est_lambda2.distrib_mean; 
-    CC = mean(est_CC.using_lambda2_diffs(12/PARAMETERS.tstep_duration + 1:end));
-elseif choose == "diffs"
-    l1_CC = mean(est_lambda1.using_diffs);
-    l2_CC = est_lambda2.diffs_mean;
-    CC = mean(est_CC.using_diffs(12/PARAMETERS.tstep_duration + 1:end));
+switch choose 
+    case {'distrib'}
+        l1_CC = mean(est_lambda1.MLE); 
+        l2_CC = est_lambda2.distrib_mean; 
+        CC = mean(est_CC.using_lambda2_diffs(12/PARAMETERS.tstep_duration + 1:end));
+    case {'diffs'}
+        l1_CC = mean(est_lambda1.using_diffs);
+        l2_CC = est_lambda2.diffs_mean;
+        CC = mean(est_CC.using_diffs(12/PARAMETERS.tstep_duration + 1:end));
 end
 
 % Save thhe average internalised numbers with CC
@@ -100,9 +102,9 @@ internal_CC(1) = pdf(1);
 for i = 2:length(binrng)
     l2_dyn = l2_CC*(1-internal_CC(i-1)/CC);
     pdf(i) = f_hypoexp(binrng(i),l1_CC,l2_dyn,PARAMETERS.prtcls_per_cell);
-    internal_CC(i) = internal_CC(i-1)+pdf(i);
+    internal_CC(i) = internal_CC(i-1)+pdf(i).*PARAMETERS.tstep_duration;
 end
-internal_CC = F_hypoexp(binrng,l1_CC,est_lambda2.distrib,PARAMETERS.prtcls_per_cell);
+%internal_CC = F_hypoexp(binrng,l1_CC,est_lambda2.distrib,PARAMETERS.prtcls_per_cell);
 interact_CC = assoc_CC - internal_CC;
 plot(binrng,assoc_CC,'y--');
 plot(binrng,internal_CC,'y--');
@@ -126,12 +128,24 @@ ylabel('Average number of particles per cell');
 fig22.Position = [100,100,1300,700];
 date_time = num2str(fix(clock));
 date_time = date_time(find(~isspace(date_time)));
-savefig(fig22, [pwd '\With_or_without CC' date_time], 'compact')
-saveas(fig22, [pwd '\With_or_without CC' date_time], 'png')
+savefig(fig22, [pwd '\With_or_without CC' num2str(PARAMETERS.max_prtcls(end)) choose date_time], 'compact')
+saveas(fig22, [pwd '\With_or_without CC' num2str(PARAMETERS.max_prtcls(end)) choose date_time], 'png')
 
 % Find the timestep at which the internalised curve deviates away from the
 % case without CC
 diff_btwn_cases = internalised_cases(1,:) - internalised_cases(2,:);
 tsteps_similar = binrng(diff_btwn_cases <= tol_diffCases);
 tstep_deviate = max(tsteps_similar);
+fprintf(['The time (hours) at which the internalised curve deviates away'...
+    ' from the case without CC by more than ' num2str(tol_diffCases) ' particles: \n'])
 disp(tstep_deviate);
+
+% Print the estimates for lambda and the carrying capacity
+format short e
+fprintf('Actual: \n\tlambda1 \tlambda2 \t\tCC \n')
+disp([l1, l2, PARAMETERS.max_prtcls(end)])
+fprintf(['Using method: ' choose '\n\n'])
+fprintf('Without CC: \n\tlambda1 \tlambda2 \n')
+disp([l1_noCC, l2_noCC])
+fprintf('Without CC: \n\tlambda1 \tlambda2 \t\tCC \n')
+disp([l1_CC, l2_CC, CC])
