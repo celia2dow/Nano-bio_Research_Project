@@ -3,7 +3,7 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 % in a 2.D cell monolayer within a culture dish as they interact with and
 % internalised particles.
 %
-%   This is the work of Celia Dowling 03/02/22
+%   This is the work of Celia Dowling 23/02/22
 %
 %   The input argument is a structure PARAMETERS containing the fields:
 %
@@ -16,6 +16,8 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 %                                   monolayer per cell
 %       cell_diam (micrometers)     Average diameter of particlular cell-type. 
 %       culture_dim (cell diameters) Lattice dimensions are culture_dim by culture_dim.
+%       culture_media_height (mm)   The height of the cell culture media
+%                                   above the cell monolayer
 %       EWT_move (hours)            Expected waiting time for one cell to 
 %                                   move 1 cell diameter. Must be greater than
 %                                   or equal to tstep_duration.
@@ -127,16 +129,22 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 rate_move = PARAMETERS.tstep_duration/PARAMETERS.EWT_move;
 
 % Rate of particle diffusivity (i.e. of particle hitting).
-% Use Stokes-Einstein equation:
+% Use Stokes-Einstein equation to calculate the diffusion coefficient of
+% the particle in the given conditions:
 k_B = 1.380649E-23; % Boltzmann constant
 T_K = PARAMETERS.temp + 273.15; % Temperature in kelvin
-r_m = PARAMETERS.prtcl_rad * (10E-9); % Particle radius in meters
-A_cell = pi * (PARAMETERS.cell_diam * 10E-6/2)^2; % 2D area of cell
+r_m = PARAMETERS.prtcl_rad * (1E-9); % Particle radius in meters
+h = PARAMETERS.culture_media_height * (1e-3); % Culture media height in meters
+ratio_cell2site_area = pi /4; % Ratio of cell area to the lattice site it sits on
 eta = PARAMETERS.viscos;
-rate_diffus = k_B * T_K / (6 * pi * eta * r_m); % In m^2 per second
-rate_diffus = rate_diffus * (60^2); % In m^2 per hour
-rate_diffus = PARAMETERS.tstep_duration*rate_diffus; % In m^2 per timestep
-rate_diffus = rate_diffus / A_cell; % In per timestep
+diffus_coeff = k_B * T_K / (6 * pi * eta * r_m) ... % In m^2 per second
+    * (60^2)...                                     % In m^2 per hour
+    * PARAMETERS.tstep_duration;                    % In m^2 per timestep
+% Divide by the culture height squared to get the rate of transition
+% through the bottom of the column on the lattice site, then multiply by
+% the ratio of this quare area to the cell area (approximated as a flat
+% disk) to get the rate of hitting.
+rate_diffus = diffus_coeff * ratio_cell2site_area /(h^2); % In per timestep
 
 % A list of K rates of cells transitioning between phases in the cell 
 % proliferation cycle (e.g. phase 1 to phase 2, phase 2 to phase 3, ..., 
@@ -510,186 +518,3 @@ EVOLUTION_INFO = struct('cell_population', cell_population(1:tstep+1), ...
     'cell_pair_cor_coef', cell_pair_cor_coef);
 end
 
-
-
-%%% SUBFUNCTIONS %%%
-
-function NEW_SITE = choose_adjacent_site(CULTURE_DIM, CURRENT_SITE)
-% CHOOSE_ADJACENT_SITE Given the CURRENT_SITE in a CULTURE_DIM by CULTURE_DIM lattice, 
-% choose a NEW_SITE that is directly adjacent (up, down, left, right)
-
-% Convert linear indices to [row,column] coordinates 
-[current_row, current_col] = ind2sub(CULTURE_DIM, CURRENT_SITE);
-        
-% Each selected cell chooses a random direction to move in
-delta = randsample([randsample([-1,1],1),0],2);
-new_row_col = [current_row, current_col] + delta;
-            
-% For every cell that pops out of the lattice on one side, another cell
-% pops into the lattice on the opposite side
-new_row_col(new_row_col > CULTURE_DIM) = 1;
-new_row_col(new_row_col < 1) = CULTURE_DIM; 
-        
-% Convert [row, column] coordinates to linear indices
-NEW_SITE = sub2ind([CULTURE_DIM,CULTURE_DIM], new_row_col(1), new_row_col(2));
-end
-
-
-function NUM_OCCUPIED_NEIGHS = count_occupied_neighs(CULTURE_DIM, N_TSTEP, CELL_SITES, CULTURE_DISH)
-% COUNT_OCCUPIED_NEIGHS Given the CELL_SITES which are occupied by cells in
-% a CULTURE_DIM by CULTURE_DIM, lattice, count the number of nearest neighbours to each
-% occupied site that are also occupied.
-NUM_OCCUPIED_NEIGHS = 0;
-    for cell = 1:N_TSTEP
-        [current_row, current_col] = ind2sub(CULTURE_DIM, CELL_SITES(cell));
-        
-        % Find the neighbours of the current site
-        neighs_sub = [current_row, current_col + 1; ...
-            current_row, current_col - 1; ...
-            current_row + 1, current_col; ...
-            current_row - 1, current_col];
-        
-        % Assume the torus shape of the domain and allow for edge and
-        % corner sites to have neighbours on the opposite edges/corners.
-        neighs_sub(neighs_sub>CULTURE_DIM)=1;
-        neighs_sub(neighs_sub<1)=CULTURE_DIM;
-        
-        % Convert [row, column] coordinates to linear indices
-        neighs_ind = sub2ind([CULTURE_DIM,CULTURE_DIM], neighs_sub(:,1), neighs_sub(:,2));
-        
-        % Add to the total the number of neighbours that are occupied
-        cell_neighs = CULTURE_DISH(neighs_ind);
-        NUM_OCCUPIED_NEIGHS = NUM_OCCUPIED_NEIGHS + nnz(cell_neighs);
-    end
-end
-
-
-function draw_frame(PARAMETERS,N_TSTEP, TSTEP, L, CELL_SITES, CELL_PHASES, CELL_PRTCLS)
-% DRAW_FRAME Save each figure as a frame in the movie illustrating the 
-% evolution of the culture dish as cells move, proliferate and internalise
-% particles.
-
-[rows, cols] = ind2sub(PARAMETERS.CULTURE_DIM, CELL_SITES);
-rows_um = rows * PARAMETERS.cell_diam; % (micrometers)
-cols_um = cols * PARAMETERS.cell_diam; % (micrometers)
-culture_dim_um = PARAMETERS.culture_dim * PARAMETERS.cell_diam; % (micrometers)
-siz_phase = 10*CELL_PHASES; % Sizes of cell depend on cell phase
-
-if PARAMETERS.visual == 1
-    %%% Slower, more comprehensive visual %%%
-    
-    % Draw a scatter plot of the culture dish with:
-    %       size of cell indicating phase of cell proliferation cycle
-    %       opacity of cell colour indicating number of internalised particles
-    %       width of cell outline indicating number of interacting particles
-    col_cell = [1 0 0];
-    % Transparency of cell colour depends on number of internalised particles
-    if PARAMETERS.max_prtcls(L) == inf
-        transp_cell = CELL_PRTCLS(:,end) .* 0.015;
-    else
-        transp_cell = CELL_PRTCLS(:,end)/PARAMETERS.max_prtcls(L);
-    end
-    for cell = 1:N_TSTEP
-        % Width of edge of cell depends on number of interacting particles
-        if L == 1 || sum(CELL_PRTCLS(cell,2:end - 1)) == 0
-            wid_edge = 0.1;
-            col_edge = [0 1 0];
-        else
-            wid_edge = 0.1 * sum(CELL_PRTCLS(cell,2:end - 1),2);
-            col_edge = [0 0 1];
-        end 
-        % Plot point for cell ensuring the graph represents the lattice 
-        % positioning
-        scatter(cols_um(cell), culture_dim_um - rows_um(cell) + 1, siz_phase(cell), ...
-        'MarkerEdgeColor', col_edge, 'MarkerFaceColor', col_cell, ...
-        'MarkerFaceAlpha', transp_cell(cell), 'LineWidth', wid_edge);
-        hold on
-    end
-else
-    %%% Faster, less comprehensive visual %%%
-    % Draw a scatter plot of the culture dish with:
-        %       size of cell indicating phase of cell proliferation cycle
-        %       pink opacity of cell colour indicating number of internalised particles
-        %       acqua opacity of cell colour indicating number of interacting particles
-    if any(PARAMETERS.max_prtcls == inf)
-        max_interact = PARAMETERS.prtcls_per_cell .* 0.5;
-        c = [1-sum(CELL_PRTCLS(1:N_TSTEP,2:end - 1),2)./max_interact, ... % interacting particles
-            (1-CELL_PRTCLS(1:N_TSTEP,end)) .* 0.015, ...% particles internalised
-            ones(N_TSTEP,1)]; % to ensure that no particles gives white
-    else
-        max_interact = sum(PARAMETERS.max_prtcls(1:L-1),2);
-        c = [1-sum(CELL_PRTCLS(1:N_TSTEP,2:end - 1),2)./max_interact, ... % interacting particles
-            1-(CELL_PRTCLS(1:N_TSTEP,end)./PARAMETERS.max_prtcls(L)), ...% particles internalised
-            ones(N_TSTEP,1)]; % to ensure that no particles gives white
-    end
-    scatter(cols_um(1:N_TSTEP), culture_dim_um - rows_um(1:N_TSTEP) + 1, ...
-        siz_phase(1:N_TSTEP), c, 'filled', 'MarkerEdgeColor', 'k'); 
-end
-
-xlim([0.5*PARAMETERS.cell_diam culture_dim_um+0.5*PARAMETERS.cell_diam]); 
-ylim([0.5*PARAMETERS.cell_diam culture_dim_um+0.5*PARAMETERS.cell_diam]);
-xlabel('$x (\mu m)$', 'Interpreter', 'latex');
-ylabel('$y (\mu m)$', 'Interpreter', 'latex');
-title(sprintf('time = %3.1f hours',TSTEP*PARAMETERS.tstep_duration));
-drawnow
-end
-
-
-function X = rand_pmf(x,PMF,NUM)
-% RAND_PMF Random numbers from a user defined discrete distribution
-%
-% X=rand_gen(x,pmf,N)
-% Input:
-% x   : set of the all possible values that the desired random signal can
-%       assume
-% pmf : vector that cointains the probability of each possible 
-%       value of x
-% N   : number of random values to be chosen
-% output:
-% X   : random signal with the desired pmf
-%
-% Example: 
-% pmf=[1/3 1/3 1/3]
-% x=[1 2 3];
-% num=100;
-% X=rand_gen(x,pmf,num);
-a=[0;cumsum((PMF(:)))]*(1./rand(1,NUM));
-b=a>ones(length(PMF)+1,NUM);
-[~,index]=max(b);
-x=x(:);
-if index>1
-    X=x(index-1);
-else
-    X=0;
-end
-end
-
-
-function [lambda1,lambda2] = input_EWT_from_fraction(frac_associated,...
-    frac_internalised,num_hours)
-% INPUT_EWT_FROM_FRACTION calculates the rates that can be input into
-% cells_simulation.m given the desired fractional association
-% (frac_associated) and the desired fractional internalisation
-% (frac_internalised) after so many hours (num_hours). frac_associated
-% and frac_internalised are numbers between 0 and 1.
-
-% Find lambda1 from the CDF of the exponential distribution, F(t), given
-% that F(num_hours)=frac_associated
-lambda1 = log(1-frac_associated)/(-num_hours); 
-
-% Don't want the root finding function to arrive at lambda1=lambda2
-if 1 >= frac_internalised/(frac_associated^2) % lambda1 >= lambda2
-    guess = lambda1/3;
-else % lambda1 < lambda2
-    guess = 3*lambda1;
-end
-
-% Create a function from the CDF of the hypoexponential distribution, G(t),
-% given that G(num_hours)=frac_internalised and lambda1 is as calculated.
-fun = @(lambda2) 1 - frac_internalised - 1/(lambda2-lambda1) * ...
-    (lambda2 * exp(-lambda1 * num_hours) - ...
-    lambda1 * exp(-lambda2 * num_hours));
-
-% Estimate lambda2 by finding the root of this function (away from lambda1)
-lambda2 = fzero(fun,guess);
-end
