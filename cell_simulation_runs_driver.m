@@ -2,7 +2,7 @@
 % simulation with the specified parameters for a given number of iterations 
 % and produces summary statistics from the numerous runs.
 %
-%   This is the work of Celia Dowling 04/02/22
+%   This is the work of Celia Dowling 23/02/22
 %
 %   The input argument for cells_simulation.m is a structure PARAMETERS 
 %   which has the following fields that need to be defined by the user:
@@ -16,6 +16,8 @@
 %                                   monolayer per cell
 %       cell_diam (micrometers)     Average diameter of particlular cell-type. 
 %       culture_dim (cell diameters) Lattice dimensions are culture_dim by culture_dim.
+%       culture_media_height (mm)   The height of the cell culture media
+%                                   above the cell monolayer
 %       EWT_move (hours)            Expected waiting time for one cell to 
 %                                   move 1 cell diameter. Must be greater than
 %                                   or equal to tstep_duration.
@@ -151,14 +153,15 @@ PARAMETERS = struct( ...
     'simulation_duration',24, ... (hours)
     'tstep_duration',1/6, ... (hours)
     'initial_num_cells', 100, ... 
-    'prtcls_per_cell', 1000, ...
+    'prtcls_per_cell', 5000, ...
     'cell_diam', 25, ... (micrometers)
     'culture_dim', 10, ... (cell diameters)
+    'culture_media_height', 5,... (millimeters)
     'EWT_move', 1/6, ... (hours) 
     'EWTs_proliferate', [4,4,4], ... [4,4,4], ... [phase 1, ..., phase K](hours) 
     'EWTs_internalise', struct('input_type', "fraction", ... "fraction" or "EWT"
-    'values', [0.05,0.03,24]), ... see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
-    'max_prtcls', [inf,inf], ... [stage 1, ..., stage L]
+    'values', [0.01,0.006,24]), ... see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
+    'max_prtcls', [inf,50], ... [stage 1, ..., stage L]
     'prob_inherit', 0.7, ...     
     'temp', 36, ... (degrees celsius)    
     'viscos', 1.0005E-3,... (kiloggrams / (meter*second))      
@@ -167,22 +170,19 @@ PARAMETERS = struct( ...
     'visual', 0 ...
     );
 
+date_time = num2str(fix(clock));
+date_time = date_time(find(~isspace(date_time)));
+
 folder_name = ['Number_Runs' num2str(num_runs) ...
-    'Simulation_Duration' num2str(PARAMETERS.simulation_duration) ...
-    '_tstepDuration' num2str(PARAMETERS.tstep_duration) ...
     '_N0' num2str(PARAMETERS.initial_num_cells) ...
     '_dim' num2str(PARAMETERS.culture_dim) ...
-    '_cellDiam' num2str(PARAMETERS.cell_diam) ...
     '_maxPrtcls' num2str(PARAMETERS.max_prtcls) ...
     '_pPerC' num2str(PARAMETERS.prtcls_per_cell) ...
-    '_EWTmove' num2str(PARAMETERS.EWT_move) ...
-    '_Pinherit' num2str(PARAMETERS.prob_inherit) ...
-    '_EWTprolif' num2str(PARAMETERS.EWTs_proliferate) ...
-    '_prtclRad' num2str(PARAMETERS.prtcl_rad) ...
     '_EWTintern' num2str(PARAMETERS.EWTs_internalise.values) ...
-    ];
+    '_' date_time];
+folder_name = folder_name(find(~isspace(folder_name)));
 
-PARAMETERS.folder_path = [pwd '\' date '\' folder_name];
+PARAMETERS.folder_path = [pwd '/' date '/' folder_name];
 
 if ~exist(PARAMETERS.folder_path, 'dir')
     mkdir(PARAMETERS.folder_path)
@@ -268,8 +268,8 @@ for time_plot = 1:length(hour_indices)
 end
 sgtitle(fig2, 'Frequency of cells with certain numbers of interacting/internalised particles over time')
 fig2.Position = [100,100,1300,700];
-savefig(fig2, [PARAMETERS.folder_path '\Frequency_histograms'], 'compact')
-saveas(fig2, [PARAMETERS.folder_path '\Frequency_histograms'], 'png')
+savefig(fig2, [PARAMETERS.folder_path '/Frequency_histograms'], 'compact')
+saveas(fig2, [PARAMETERS.folder_path '/Frequency_histograms'], 'png')
 
 % Plot associated Vs interacting+internalised cells over time
 means = zeros(3,total_tsteps+1);
@@ -351,8 +351,8 @@ subplot(1,2,1)
 ylim([0 max(upper1,[],'all')])
 sgtitle('Average number of particles associated per cell')
 fig7.Position = [100,100,1300,700];
-savefig(fig7, [PARAMETERS.folder_path '\Associated_vs_internalised'], 'compact')
-saveas(fig7, [PARAMETERS.folder_path '\Associated_vs_internalised'], 'png')
+savefig(fig7, [PARAMETERS.folder_path '/Associated_vs_internalised'], 'compact')
+saveas(fig7, [PARAMETERS.folder_path '/Associated_vs_internalised'], 'png')
 
 
 % Plot the mean Pair Correlation Coefficient over time (the mean PCC at
@@ -379,20 +379,29 @@ else
     subtitle('With motility events')
 end
 fig8.Position = [100,100,1300,700];
-savefig(fig8, [PARAMETERS.folder_path '\PCC_and_confluence'], 'compact')
-saveas(fig8, [PARAMETERS.folder_path '\PCC_and_confluence'], 'png')
+savefig(fig8, [PARAMETERS.folder_path '/PCC_and_confluence'], 'compact')
+saveas(fig8, [PARAMETERS.folder_path '/PCC_and_confluence'], 'png')
 
-
+% HEURISTIC ESTIMATES
+%   of tmax_noCC, lambda1, lambda2 and CC
 % Use the provided data on the mean numbers of particles per cell that are 
 % free, interacting and internalised and estimate the parameters of the 
 % exponential and hypoexponential distributions that the inter-event times 
 % follow (of particle association and particle internalisation respectively).
 
+fprintf("\nHeuristic estimates for lambda from free to stage 1 and from stage 1 to stage 2: \n(units are per hour)\n")
+
 % The mean number of free particles available to a cell at the beginning of
 % each timestep is the number that haven't been associated on the previous
 % timestep divided amongst the lattice sites. 
-freePrtcls_start_of_t = (PARAMETERS.prtcls_per_cell * PARAMETERS.initial_num_cells .* ...
+freePrtcls_start_of_t = (PARAMETERS.prtcls_per_cell * PARAMETERS.initial_num_cells .* ... % mean
     ones(1,length(binrng)) - (means(3,:) .* total.cell_population) ./ num_runs) ./ ...
+    (PARAMETERS.culture_dim^2);
+freePrtcls_start_of_tUP = (PARAMETERS.prtcls_per_cell * PARAMETERS.initial_num_cells .* ... % 1 std.dev. above
+    ones(1,length(binrng)) - (upper1(3,:) .* total.cell_population) ./ num_runs) ./ ...
+    (PARAMETERS.culture_dim^2);
+freePrtcls_start_of_tLO = (PARAMETERS.prtcls_per_cell * PARAMETERS.initial_num_cells .* ... % 1 std.dev. below
+    ones(1,length(binrng)) - (lower1(3,:) .* total.cell_population) ./ num_runs) ./ ...
     (PARAMETERS.culture_dim^2);
 % No interaction occur prior to 0 hours, so the entry for '0 hours' 
 % (timestep 0 or typically index 1) is in fact the free particles available 
@@ -400,6 +409,8 @@ freePrtcls_start_of_t = (PARAMETERS.prtcls_per_cell * PARAMETERS.initial_num_cel
 % and so on. The last entry is simply the number of free particles 
 % available per cell at the end of the simulation.
 freePrtcls_start_of_t = freePrtcls_start_of_t(1:(end-1)); % for timestep 1, 2, ...
+freePrtcls_start_of_tUP = freePrtcls_start_of_tUP(1:(end-1)); % 1 std.dev. above
+freePrtcls_start_of_tLO = freePrtcls_start_of_tLO(1:(end-1)); % 1 std.dev. below
 
 % The mean number of particles interacting with a cell at the beginning of
 % each timestep is the number that are recorded in the previous timestep.
@@ -407,7 +418,11 @@ freePrtcls_start_of_t = freePrtcls_start_of_t(1:(end-1)); % for timestep 1, 2, .
 % (typically index 2) from 0-0.1667 hours is the number recorded as
 % interacting at the end of timestep 0 (typically index 1) at 0 hours.
 interactPrtcls_start_of_t = means(1,1:(end-1)); % for timestep 1, 2, ...
+interactPrtcls_start_of_tUP = means(3,1:(end-1))-upper1(2,1:(end-1)); % 1 std.dev. above
+interactPrtcls_start_of_tLO = means(3,1:(end-1))-lower1(2,1:(end-1)); % 1 std.dev. below
 
+% ESTIMATE LAMBDA 1
+%   via DIFFERENCES method
 % Estimate lambda_1, the parameter for the exponential distribution that
 % describes the inter-association times of particles per cell, by
 % calculating the mean fraction of association events that occur (the
@@ -415,219 +430,158 @@ interactPrtcls_start_of_t = means(1,1:(end-1)); % for timestep 1, 2, ...
 % i.e., the number of free particles) over the duration of time passed.
 est_lambda1.using_diffs = (means(3,2:end)- means(3,1:(end-1)))./... new in tstep 1, 2, ...
     (binrng(2).*freePrtcls_start_of_t); % free at the beginning of tstep 1, 2, ...
+est_lambda1.using_diffs_mean = mean(est_lambda1.using_diffs);
+% 1 std.dev. above
+est_lambda1UP.using_diffs = (upper1(3,2:end)- upper1(3,1:(end-1)))./... 
+    (binrng(2).*freePrtcls_start_of_tUP); 
+est_lambda1UP.using_diffs_mean = mean(est_lambda1UP.using_diffs);
+% 1 std.dev. below
+est_lambda1LO.using_diffs = (lower1(3,2:end)- lower1(3,1:(end-1)))./... 
+    (binrng(2).*freePrtcls_start_of_tLO); 
+est_lambda1LO.using_diffs_mean = mean(est_lambda1LO.using_diffs);
 
-% Estimate lambda_1 using the MLE
+% ESTIMATE LAMBDA 1
+%   via MLE method
 smth_assoc = smooth(means(3,:))'; % number associated at end of tstep 0, 1, 2, ...
 est_lambda1.MLE = smth_assoc(2:end)./ ... % num assoc at end of tstep 1, 2, ...
     (binrng(2:end).*PARAMETERS.prtcls_per_cell); % time at end of tstep 1, 2, ...
+est_lambda1.MLE_mean = mean(est_lambda1.MLE);
+% 1 std.dev. above
+smth_assocUP = smooth(upper1(3,:))'; 
+est_lambda1UP.MLE = smth_assocUP(2:end)./ ... 
+    (binrng(2:end).*PARAMETERS.prtcls_per_cell); 
+est_lambda1UP.MLE_mean = mean(est_lambda1UP.MLE);
+% 1 std.dev. below
+smth_assocLO = smooth(lower1(3,:))'; 
+est_lambda1LO.MLE = smth_assocLO(2:end)./ ...
+    (binrng(2:end).*PARAMETERS.prtcls_per_cell); 
+est_lambda1LO.MLE_mean = mean(est_lambda1LO.MLE);
 
-% Create a function from the CDF of the hypoexponential distribution, G(t),
-% given that G(t)=frac_internalised and lambda1 is as calculated in the MLE.
-est_lambda2.distrib = zeros(1,length(binrng));
-smth_intern = smooth(means(2,:))'; %means(2,:); %
-for i = 1:length(binrng)
-%     fun = @(lambda2) 1 - smth_intern(i)./PARAMETERS.prtcls_per_cell - 1/(lambda2-mean(est_lambda1.MLE)) * ...
-%         (lambda2 * exp(-mean(est_lambda1.MLE) * binrng(i)) - ...
-%         mean(est_lambda1.MLE) * exp(-lambda2 * binrng(i)));
-    % Hypoexponential PDF - Internalised
-    new_frac_internalised = gradient(means(2,:),PARAMETERS.tstep_duration)./PARAMETERS.prtcls_per_cell;
-    fun = @(lambda2) mean(est_lambda1.MLE) .* lambda2 ./(mean(est_lambda1.MLE) - lambda2) ...
-        .* (exp(-lambda2 .* binrng(i)) - exp(-mean(est_lambda1.MLE) .* binrng(i))) ...
-        - new_frac_internalised(i);
-    guess = [mean(est_lambda1.MLE)/3 mean(est_lambda1.MLE)*3];
-    % Estimate lambda2 by finding the root of this function (away from lambda1)
-    % i.e., by substituting the data into the hypoexponential distribution
-    est_lambda2.distrib(i) = fzero(fun,guess(2));
-    if est_lambda2.distrib(i) == est_lambda1.MLE
-        est_lambda2.distrib(i) = fzero(fun,guess(1));
-    end
-end
-% Find a range of valid timesteps for which to use internalisation/
-% interaction data when CC is included (valid indicating that the impact of
-% the CC is negligible)
-tsteps = binrng;
-if any(PARAMETERS.max_prtcls ~= inf) 
-    % Assume that the carrying capacity kicks in at some amount of hours
-    % relative to when the internalised curve becomes roughly linear
-%     fprintf('Carrying capacity is implemented \n')
-%     smooth_internalised = smooth(means(2,:),10)';
-%     deriv1_internalised = smooth(gradient(smooth_internalised,PARAMETERS.tstep_duration),10);
-%     deriv2_internalised = smooth(gradient(deriv1_internalised,PARAMETERS.tstep_duration),10);
-%     zero_deriv2_internalise_tsteps = binrng(abs(deriv2_internalised)<=tol);
-%     tmax_noCC = min(zero_deriv2_internalise_tsteps)/2;
-    
-    % Alternatively just choose a blanket hour at which to cease accepting
-    % data
-%     tmax_noCC = 4;
-    
-    % Alternatively, assume that the CC begins to have a significant impact
-    % on the data when the lambda2 value estimated from the hypoexponential
-    % distribution deviates away from constant by a specific tolerance
-    deriv1_l2_distrib = gradient(est_lambda2.distrib);
-    bool_slight_drop = zeros(1,length(deriv1_l2_distrib));
-    for i = 1:length(deriv1_l2_distrib)
-        bool_slight_drop(i) = abs(deriv1_l2_distrib(i))<tol_l2 && ... 
-            deriv1_l2_distrib(i)<0;
-    end
-    indices_slight_drop = find(bool_slight_drop);
-    tmax_noCC = tsteps(min(indices_slight_drop(indices_slight_drop>(3/PARAMETERS.tstep_duration))));
-    tmax_noCC = max([tmax_noCC, 4]); % Just in case it's too small 
-    
-    % Limit the timesteps investigated to the tsteps up until this validity
-    % limit
-    tsteps = 0:PARAMETERS.tstep_duration:tmax_noCC; 
-else
-    fprintf('No carrying capacity is implemented \n')
-end
+% CDF of hypoexponential distribution
+CDF.hypoexp = @(l1, l2, t) 1 - 1./(l2-l1) .* (l2 .* exp(-l1 .* t) - l1 .* exp(-l2 .* t));
+CDF.hypoexp_MLEl1 = @(l2,t) CDF.hypoexp(est_lambda1.MLE_mean,l2,t);
+CDF.hypoexp_MLEl1_tstep = @(l2) CDF.hypoexp_MLEl1(l2,PARAMETERS.tstep_duration);
+% CDF of exponential distribution
+CDF.exp = @(l, t) 1 - exp(- l .*t);
+CDF.exp_tstep = @(l) CDF.exp(l,PARAMETERS.tstep_duration);
+% Two guesses to feed into fzero in case one gives lambda2=lambda1
+guess = [est_lambda1.MLE_mean/3 est_lambda1.MLE_mean*3]; % mean
 
-% Find when the steady state in interacting particles is reached, if it
-% exists
-deriv1_interacting = gradient(means(1,:),PARAMETERS.tstep_duration);
-%deriv1_interacting = smooth((means(2,2:length(tsteps))-means(2,1:length(tsteps)-1))./PARAMETERS.tstep_duration);
-zero_deriv1_interacting_tsteps = tsteps(abs(deriv1_interacting(1:length(tsteps)))<=tol);
-zero_deriv1_interacting_tsteps = zero_deriv1_interacting_tsteps...
-    (zero_deriv1_interacting_tsteps > 0.2);
-%zero_deriv1_interacting_tsteps = zero_deriv1_interacting_tsteps - PARAMETERS.tstep_duration;
-% Find the timesteps when a constant non-zero gradient in interacting
-% particles is reached, if it exists
-deriv2_interacting = gradient(deriv1_interacting,PARAMETERS.tstep_duration);
-%deriv2_interacting = (deriv1_interacting(2:end)-deriv1_interacting(1:end-1))./PARAMETERS.tstep_duration;
-zero_deriv2_interacting_tsteps = tsteps(abs(deriv2_interacting(1:length(tsteps)))<=tol);
-zero_deriv2_interacting_tsteps = zero_deriv2_interacting_tsteps...
-    (zero_deriv2_interacting_tsteps > 0.2);
-%zero_deriv2_interacting_tsteps = zero_deriv2_interacting_tsteps - PARAMETERS.tstep_duration;
-% If there is a turning point and thus a steady state
-if any(zero_deriv1_interacting_tsteps) && deriv1_interacting(end)<0
-    % lambda_2 can be estimated by equating lambda_1*(# free particles) and
-    % lambda_2*(# interacting particles) when a steady state is reached in
-    % the number of iteracting particles per cell
-    indices = zeros(1,length(zero_deriv1_interacting_tsteps));
-    for i = 1:length(zero_deriv1_interacting_tsteps)
-        indices(i) = find(tsteps == zero_deriv1_interacting_tsteps(i));
-    end
-    indices = indices -1;
-    % Estimate lambda_2 using 
-    %       lambda_1*(# free particles at start of t) = 
-    %       lambda_2* (# interacting particles at start of t) 
-    est_lambda2.using_diffs = mean(est_lambda1.using_diffs) .* freePrtcls_start_of_t(indices) ./ ...
-        interactPrtcls_start_of_t(indices);
+% ESTIMATE TIME AT WHICH CC KICKS IN (TMAX_NOCC) and LAMBDA 2
+%   via DISTRIBUTION method
+[tmax_noCC,est_lambda2.distrib_mean,est_lambda2.distrib] = ... 
+    tmax_l2_from_hypoexpCDF(binrng,CDF.hypoexp_MLEl1,means,PARAMETERS,...
+    guess,est_lambda1.MLE_mean,tol_l2);
+% 1 std.dev. above - assuming that lambda1 is the mean MLE
+[~,est_lambda2UP.distrib_mean,est_lambda2UP.distrib] = ... 
+    tmax_l2_from_hypoexpCDF(binrng,CDF.hypoexp_MLEl1,upper1,PARAMETERS,...
+    guess,est_lambda1UP.MLE_mean,tol_l2);
+% 1 std.dev. above - assuming that lambda1 is the mean MLE
+[~,est_lambda2LO.distrib_mean,est_lambda2LO.distrib] = ... 
+    tmax_l2_from_hypoexpCDF(binrng,CDF.hypoexp_MLEl1,lower1,PARAMETERS,...
+    guess,est_lambda1LO.MLE_mean,tol_l2);
 
-    fprintf("Heuristic estimates for lambda and EWT from free to stage 1 and from stage 1 to stage 2: \n")
-    disp([mean(est_lambda1.using_diffs), 1/mean(est_lambda1.using_diffs)]);
-    disp([mean(est_lambda2.using_diffs), 1/mean(est_lambda2.using_diffs)]);
-    
-% If there is an interval of constant gradient
-elseif zero_deriv2_interacting_tsteps 
-    % lambda_2 can be estimated by equating the gradient of the curve of 
-    % average interacting particles over time with the difference in
-    % gradients of the curve for average associated particles over time *(# free particles) and
-    % lambda_2*(# interacting particles) when a steady state is reached in
-    % the number of iteracting particles per cell
-    indices = zeros(1,length(zero_deriv2_interacting_tsteps));
-    for i = 1:length(zero_deriv2_interacting_tsteps)
-        indices(i) = find(tsteps == zero_deriv2_interacting_tsteps(i));
-    end
-    indices = indices -1;
-    % Find the average gradient at each timestep. Estimate lambda_2 using 
-    %       (gradient of interacting curve) * tstep_duration = 
-    %       lambda_1*(# free particles at start of t) - 
-    %       lambda_2* (# interacting particles at start of t)
-    est_lambda2.using_diffs = (mean(est_lambda1.using_diffs) .* freePrtcls_start_of_t ...
-            - deriv1_interacting(2:end))./...
-            interactPrtcls_start_of_t;
-    fprintf("Estimates for lambda and EWT from free to stage 1 and from stage 1 to stage 2: \n")
-    disp([mean(est_lambda1.using_diffs), 1/mean(est_lambda1.using_diffs)]);
-    est_lambda2.diffs_mean = mean(est_lambda2.using_diffs(indices));
-    disp([est_lambda2.diffs_mean, 1/est_lambda2.diffs_mean]);
-else
-    fprintf("lambda1 and lambda2 were not able to be estimated due to there being no steady state or constant gradient \n")
-end
+% ESTIMATE LAMBDA 2
+%   via MIX method
+[est_lambda2.mix_mean,est_lambda2.mix] = l2_from_mixMethod(...
+    binrng,CDF.hypoexp_MLEl1_tstep,CDF.exp_tstep,...
+    means,freePrtcls_start_of_t,interactPrtcls_start_of_t,...
+    PARAMETERS,guess,est_lambda1.MLE_mean,tmax_noCC);
+% 1 std.dev. above - assuming that lambda1 is the mean MLE
+[est_lambda2UP.mix_mean,est_lambda2UP.mix] = l2_from_mixMethod(...
+    binrng,CDF.hypoexp_MLEl1_tstep,CDF.exp_tstep,...
+    upper1,freePrtcls_start_of_t,interactPrtcls_start_of_tUP,...
+    PARAMETERS,guess,est_lambda1.MLE_mean,tmax_noCC);
+% 1 std.dev. below - assuming that lambda1 is the mean MLE
+[est_lambda2LO.mix_mean,est_lambda2LO.mix] = l2_from_mixMethod(...
+    binrng,CDF.hypoexp_MLEl1_tstep,CDF.exp_tstep,...
+    lower1,freePrtcls_start_of_t,interactPrtcls_start_of_tLO,...
+    PARAMETERS,guess,est_lambda1.MLE_mean,tmax_noCC);
 
-% Print rates and EWTs for internalisation from MLE and distribution
-% substitution
-fprintf("Estimates for lambda and EWT from the MLE and hypoexponential distribution: \n")
-disp([mean(est_lambda1.MLE), 1/mean(est_lambda1.MLE)]);
-est_lambda2.distrib_mean = mean(est_lambda2.distrib(1/PARAMETERS.tstep_duration:tmax_noCC/PARAMETERS.tstep_duration));
-% mean(est_lambda2.distrib((1/PARAMETERS.tstep_duration +1):(4/PARAMETERS.tstep_duration +1)));
-disp([est_lambda2.distrib_mean, 1/est_lambda2.distrib_mean]);
-% Print actual rates and EWTs for internalisation
-fprintf("Actual lambda and EWT from free to stage 1 and from stage 1 to stage 2: \n")
+tsteps = 0:PARAMETERS.tstep_duration:tmax_noCC; 
+
+% ESTIMATE LAMBDA 2
+%   via DIFFERENCES method
+[est_lambda2.using_diffs_mean,est_lambda2.using_diffs] = ...
+    l2_from_diffsMethod(tsteps,means,tol,freePrtcls_start_of_t, ...
+    interactPrtcls_start_of_t,PARAMETERS,est_lambda1.using_diffs_mean);
+% 1 std.dev. above - assuming that lambda1 is the mean from differences
+[est_lambda2UP.using_diffs_mean,est_lambda2UP.using_diffs] = ...
+    l2_from_diffsMethod(tsteps,means,tol,freePrtcls_start_of_t, ...
+    interactPrtcls_start_of_tUP,PARAMETERS,est_lambda1.using_diffs_mean);
+% 1 std.dev. below - assuming that lambda1 is the mean from differences
+[est_lambda2LO.using_diffs_mean,est_lambda2LO.using_diffs] = ...
+    l2_from_diffsMethod(tsteps,means,tol,freePrtcls_start_of_t, ...
+    interactPrtcls_start_of_tLO,PARAMETERS,est_lambda1.using_diffs_mean);
+
+% CALCULATE ACTUAL RATES
 [l1,l2] = input_EWT_from_fraction(...
     PARAMETERS.EWTs_internalise.values(1),...
     PARAMETERS.EWTs_internalise.values(2),...
     PARAMETERS.EWTs_internalise.values(3));
-disp([l1, 1/l1]); disp([l2, 1/l2]);
 
-% Heuristically estimate the CC if there is one
+% PRINT RATES
+fprintf("\nLAMBDA 1: \nACTUAL %5.4e",l1)
+fprintf('\nMETHOD \t\tMEAN \t\tLOWER ESTIMATE \tUPPER ESTIMATE')
+fprintf('\nDifferences \t%5.4e \t%5.4e \t%5.4e',...
+    est_lambda1.using_diffs_mean, est_lambda1LO.using_diffs_mean, ...
+    est_lambda1UP.using_diffs_mean);
+fprintf('\nMLE \t\t%5.4e \t%5.4e \t%5.4e \n',...
+    est_lambda1.MLE_mean, est_lambda1LO.MLE_mean, ...
+    est_lambda1UP.MLE_mean);
+
+fprintf("\nLAMBDA 2: \nACTUAL %5.4e",l2)
+fprintf('\nMETHOD \t\tMEAN \t\tLOWER ESTIMATE \tUPPER ESTIMATE')
+fprintf('\nDifferences \t%5.4e \t%5.4e \t%5.4e',...
+    est_lambda2.using_diffs_mean, est_lambda2LO.using_diffs_mean, ...
+    est_lambda2UP.using_diffs_mean);
+fprintf('\nDistribution \t%5.4e \t%5.4e \t%5.4e',...
+    est_lambda2.distrib_mean, est_lambda2LO.distrib_mean, ...
+    est_lambda2UP.distrib_mean);
+fprintf('\nMix \t\t%5.4e \t%5.4e \t%5.4e\n',...
+    est_lambda2.mix_mean, est_lambda2LO.mix_mean, ...
+    est_lambda2UP.mix_mean);
+
+
+% ESTIMATE CARRYING CAPACITY (CC) **if there is one**
+%   via DIFFERENCES method
+%   via DYNAMIC RATE calculated from DIFFERENCES METHOD
+%   via DYNAMIC RATE calculated from MIX METHOD
 if any(PARAMETERS.max_prtcls ~= inf) 
     % The number of internalised particles per cell at the start of a 
     % timestep is the number of internalised particles per cell at the end
     % of the previous timestep.
     internalPrtcls_start_of_t = means(2,1:(end-1)); % for timestep 1, 2, ...
-    % Estimate CC assuming that the dynamic lambda2 = the original lambda2
-    % * (1 - #internalised per cell/CC)
-    est_CC.using_diffs = internalPrtcls_start_of_t ./ ...
-        (1-gradient(means(2,1:end-1),PARAMETERS.tstep_duration) ./ ... 
-        (interactPrtcls_start_of_t .* 0.0891));
-    dyn_rates_to_use = find(est_lambda2.using_diffs<est_lambda2.diffs_mean);
-    est_CC.using_lambda2_diffs = internalPrtcls_start_of_t(est_lambda2.using_diffs<est_lambda2.diffs_mean) ./ ...
-        (1 - est_lambda2.using_diffs(est_lambda2.using_diffs<est_lambda2.diffs_mean)./est_lambda2.diffs_mean);
-    est_CC.using_lambda2_distrib = internalPrtcls_start_of_t ./ ...
-        (1 - est_lambda2.distrib(2:end)./est_lambda2.distrib_mean);
-    fprintf("Estimated CC using differences: \n")
-    disp(mean(est_CC.using_diffs(12/PARAMETERS.tstep_duration + 1:end)));
-    fprintf("Estimated CC using lambda2 calculated via differences: \n")
-    disp(mean(est_CC.using_lambda2_diffs(12/PARAMETERS.tstep_duration + 1:end)));
-    fprintf("Estimated CC using lambda2 calculated via distribution: \n")
-    disp(mean(est_CC.using_lambda2_distrib(12/PARAMETERS.tstep_duration + 1:end)));
-    fprintf("Actual CC: \n")
-    disp(PARAMETERS.max_prtcls(2));
+    
+    % Prepare input for CC_GIVEN_FRACTION
+    using_diffs = gradient(means(2,2:end),PARAMETERS.tstep_duration) ./ ... 
+        (interactPrtcls_start_of_t .* est_lambda2.using_diffs_mean);
+    dynamic_diffs= est_lambda2.using_diffs./est_lambda2.using_diffs_mean;
+    dynamic_mix= est_lambda2.mix./est_lambda2.mix_mean;
+    frction = [using_diffs; dynamic_diffs; dynamic_mix];
+    methods = {'using_diffs','dynamic_diffs','dynamic_mix'};
+
+    est_CC = CC_given_fraction(methods,internalPrtcls_start_of_t,frction, PARAMETERS);
+    
+    % PRINT CARRYING CAPACITIES
+    fprintf("\n\nHeuristic estimates for carrying capacity (CC): \n(units are particles)\n")
+    
+    fprintf("\nCARRYING CAPACITY: \nACTUAL %5.3f",PARAMETERS.max_prtcls(end))
+    fprintf('\nMETHOD \t\t\t\tMEAN \tLOWER ESTIMATE \tUPPER ESTIMATE')
+    fprintf('\nDifferences \t\t\t%5.3f',est_CC.using_diffs_mean);
+    fprintf('\nDynamic using differences \t%5.3f',est_CC.dynamic_diffs_mean);
+    fprintf('\nDynamic using mix \t\t%5.3f\n',est_CC.dynamic_mix_mean);
 end
 
 % Print figures
 figure(fig2)
 figure(fig7)
 figure(fig8)
-% Save the workspace
-date_time = num2str(fix(clock));
-date_time = date_time(find(~isspace(date_time)));
 
-save([PARAMETERS.folder_path '\variables_' num2str(PARAMETERS.prtcls_per_cell) ...
+% Save the workspace
+save([PARAMETERS.folder_path '/variables_' num2str(PARAMETERS.prtcls_per_cell) ...
     'pPerC_CC' num2str(PARAMETERS.max_prtcls(end)) ...
     '_' num2str(PARAMETERS.EWTs_internalise.values(1)) ...
     '_' num2str(PARAMETERS.EWTs_internalise.values(2)) ...
     '_' date_time '.mat']);
 
-
-%%% SUBFUNCTIONS %%%
-% hypo_exp = @(lambda,tdata) 100.*(1 - (lambda(2).*exp(-lambda(1).*tdata) - ...
-%     lambda(1).*exp(-lambda(2).*tdata))./(lambda(2)-lambda(1)));
-
-function [lambda1,lambda2] = input_EWT_from_fraction(frac_associated,...
-    frac_internalised,num_hours)
-% INPUT_EWT_FROM_FRACTION calculates the rates that can be input into
-% cells_simulation.m given the desired fractional association
-% (frac_associated) and the desired fractional internalisation
-% (frac_internalised) after so many hours (num_hours). frac_associated
-% and frac_internalised are numbers between 0 and 1.
-
-% Find lambda1 from the CDF of the exponential distribution, F(t), given
-% that F(num_hours)=frac_associated
-lambda1 = log(1-frac_associated)/(-num_hours); 
-
-% Don't want the root finding function to arrive at lambda1=lambda2
-if 1 >= frac_internalised/(frac_associated^2) % lambda1 >= lambda2
-    guess = lambda1/3;
-else % lambda1 < lambda2
-    guess = 3*lambda1;
-end
-
-% Create a function from the CDF of the hypoexponential distribution, G(t),
-% given that G(num_hours)=frac_internalised and lambda1 is as calculated.
-fun = @(lambda2) 1 - frac_internalised - 1/(lambda2-lambda1) * ...
-    (lambda2 * exp(-lambda1 * num_hours) - ...
-    lambda1 * exp(-lambda2 * num_hours));
-
-% Estimate lambda2 by finding the root of this function (away from lambda1)
-lambda2 = fzero(fun,guess);
-end
