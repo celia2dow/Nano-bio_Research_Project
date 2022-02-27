@@ -1,12 +1,12 @@
 function [l2_mean, l2_array] = l2_from_diffsMethod(times,av_data,tol,...
-    freePrtcls_start_of_t, interactPrtcls_start_of_t,PARAMETERS,l1_mean)
+    freePrtcls_start_of_t, interactPrtcls_start_of_t,PARAMETERS,l1)
 % L2_FROM_DIFFSMETHOD estimates lambda2 by assuming that the gradient of
 % the data (av_data) of interacting particles in a timestep before the CC 
 % kicks in (times) is a constant when a threshold in the second derivative 
 % is met (tol). Assume also that the gradient of associated particles in a 
 % timestep will be equal to the number of free particles at the beginning 
 % of that timestep (freePrtcls_start_of_t) multiplied by the rate of 
-% transition lambda1 estimated via the method of differences (l1_mean). 
+% transition lambda1 estimated via the method of differences (l1). 
 % Assume also that the gradient of internalised particles in a timestep 
 % will be equal to the number of interacting particles at the beginning of 
 % that timestep (interactPrtcls_start_of_t) multiplied by the dynamic lambda2.
@@ -16,6 +16,9 @@ function [l2_mean, l2_array] = l2_from_diffsMethod(times,av_data,tol,...
 % data is approximately constant.
 %
 % Units of rates are per hour.
+
+% Calculate tmax_noCC
+tmax_noCC = times(end);
 
 % Find when the steady state in interacting particles is reached, if it
 % exists
@@ -44,9 +47,17 @@ if any(zero_deriv1_interacting_times) && deriv1_interacting(end)<0
     % Estimate lambda_2 using 
     %       lambda_1*(# free particles at start of t) = 
     %       lambda_2* (# interacting particles at start of t) 
-    l2_array = l1_mean .* freePrtcls_start_of_t(indices) ./ ...
-        interactPrtcls_start_of_t(indices);
-    l2_mean = mean(l2_array);
+    l2_array = l1 .* freePrtcls_start_of_t ./ ...
+        interactPrtcls_start_of_t;
+    %l2_mean = mean(l2_array(indices)); % non-weighted
+    [rows,~]=size(av_data);
+    if rows>1
+        l2_mean=w8mean(l2_array(1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1)),...
+            av_data(3,1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1))); % weighted
+    else
+        l2_mean=w8mean(l2_array(1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1)),...
+            av_data(1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1))); % weighted
+    end
     
 % If there are points of constant gradient
 elseif zero_deriv2_interacting_times 
@@ -60,15 +71,26 @@ elseif zero_deriv2_interacting_times
     for i = 1:length(zero_deriv2_interacting_times)
         indices(i) = find(times == zero_deriv2_interacting_times(i));
     end
-    indices = indices -1;
+    indices = indices -2;
     % Find the average gradient at each timestep. Estimate lambda_2 using 
     %       (gradient of interacting curve) * tstep_duration = 
     %       lambda_1*(# free particles at start of t) - 
     %       lambda_2* (# interacting particles at start of t)
-    l2_array = (l1_mean .* freePrtcls_start_of_t ...
-            - deriv1_interacting(2:end))./...
-            interactPrtcls_start_of_t;
-    l2_mean = mean(l2_array(indices));
+    if length(l1)>1
+        l1 = l1(2:end);
+    end
+    l2_array = (l1 .* freePrtcls_start_of_t(2:end) ...
+            - deriv1_interacting(3:end))./...
+            interactPrtcls_start_of_t(2:end); % to avoid the initial 0
+    %l2_mean = mean(l2_array(indices)); % non-weighted
+    [rows,~]=size(av_data);
+    if rows>1
+        l2_mean=w8mean(l2_array(1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1)),...
+            av_data(3,1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1))); % weighted
+    else
+        l2_mean=w8mean(l2_array(1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1)),...
+            av_data(1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1))); % weighted
+    end
 else
     fprintf("\nlambda2 was not able to be estimated via differences due to noise \n")
     l2_array = [];
