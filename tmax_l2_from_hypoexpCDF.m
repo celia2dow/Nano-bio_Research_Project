@@ -37,6 +37,8 @@ end
 tmax_noCC = tmax_from_hypoexpCDF(PARAMETERS,l2_array,tol_l2,times);
 
 % CALCULATE L2_MEAN
-l2_mean=mean(l2_array(int64(1/PARAMETERS.tstep_duration + 1):...
-    int64(tmax_noCC/PARAMETERS.tstep_duration + 1)));
+%l2_mean=mean(l2_array(int64(1/PARAMETERS.tstep_duration + 1):...
+%    int64(tmax_noCC/PARAMETERS.tstep_duration + 1))); % non weighted
+l2_mean=w8mean(l2_array(1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1)),...
+    av_data(3,1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1))); % weighted
 end
