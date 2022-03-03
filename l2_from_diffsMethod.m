@@ -23,9 +23,7 @@ tmax_noCC = times(end);
 % Find when the steady state in interacting particles is reached, if it
 % exists
 deriv1_interacting = gradient(av_data(1,:),PARAMETERS.tstep_duration);
-zero_deriv1_interacting_times = times(abs(deriv1_interacting(1:length(times)))<=tol);
-zero_deriv1_interacting_times = zero_deriv1_interacting_times...
-    (zero_deriv1_interacting_times > 0.2);
+
 % Find the timesteps when a constant non-zero gradient in interacting
 % particles is reached, if it exists
 deriv2_interacting = gradient(deriv1_interacting,PARAMETERS.tstep_duration);
@@ -33,34 +31,8 @@ zero_deriv2_interacting_times = times(abs(deriv2_interacting(1:length(times)))<=
 zero_deriv2_interacting_times = zero_deriv2_interacting_times...
     (zero_deriv2_interacting_times > 0.2);
 
-% If there is a turning point and thus a steady state - though note that
-% this is never really appropriate
-if any(zero_deriv1_interacting_times) && deriv1_interacting(end)<0
-    % lambda_2 can be estimated by equating lambda_1*(# free particles) and
-    % lambda_2*(# interacting particles) when a steady state is reached in
-    % the number of iteracting particles per cell
-    indices = zeros(1,length(zero_deriv1_interacting_times));
-    for i = 1:length(zero_deriv1_interacting_times)
-        indices(i) = find(times == zero_deriv1_interacting_times(i));
-    end
-    indices = indices -1;
-    % Estimate lambda_2 using 
-    %       lambda_1*(# free particles at start of t) = 
-    %       lambda_2* (# interacting particles at start of t) 
-    l2_array = l1 .* freePrtcls_start_of_t ./ ...
-        interactPrtcls_start_of_t;
-    %l2_mean = mean(l2_array(indices)); % non-weighted
-    [rows,~]=size(av_data);
-    if rows>1
-        l2_mean=w8mean(l2_array(1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1)),...
-            av_data(3,1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1))); % weighted
-    else
-        l2_mean=w8mean(l2_array(1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1)),...
-            av_data(1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1))); % weighted
-    end
-    
 % If there are points of constant gradient
-elseif zero_deriv2_interacting_times 
+if zero_deriv2_interacting_times 
     % lambda_2 can be estimated by equating the gradient of the curve of 
     % average interacting particles over time at a timestep with the 
     % difference in gradients of the curve for average associated particles 
@@ -85,11 +57,13 @@ elseif zero_deriv2_interacting_times
     %l2_mean = mean(l2_array(indices)); % non-weighted
     [rows,~]=size(av_data);
     if rows>1
-        l2_mean=w8mean(l2_array(1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1)),...
-            av_data(3,1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1))); % weighted
+        maxT = min(tmax_noCC,(length(l2_array)-1)*PARAMETERS.tstep_duration);
+        l2_mean=w8mean(l2_array(1:int64(maxT/PARAMETERS.tstep_duration + 1)),...
+            av_data(3,1:int64(maxT/PARAMETERS.tstep_duration + 1))); % weighted
     else
-        l2_mean=w8mean(l2_array(1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1)),...
-            av_data(1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1))); % weighted
+        maxT = min(tmax_noCC,(length(l2_array)-1)*PARAMETERS.tstep_duration);
+        l2_mean=w8mean(l2_array(1:int64(maxT/PARAMETERS.tstep_duration + 1)),...
+            av_data(1:int64(maxT/PARAMETERS.tstep_duration + 1))); % weighted
     end
 else
     fprintf("\nlambda2 was not able to be estimated via differences due to noise \n")
