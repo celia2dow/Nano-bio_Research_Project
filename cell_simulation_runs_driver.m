@@ -143,7 +143,7 @@ close all;
 %rng(22)
 
 % Choose number of runs
-num_runs = 1;
+num_runs = 1000;
 
 % Choose a tolerance for gradient matching
 tol = 1E-1;
@@ -161,7 +161,7 @@ PARAMETERS = struct( ...
     'EWTs_proliferate', [4,4,4], ... [4,4,4], ... [phase 1, ..., phase K](hours) 
     'EWTs_internalise', struct('input_type', "fraction", ... "fraction" or "EWT"
     'values', [0.01,0.006,24]), ... see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
-    'max_prtcls', [inf,50], ... [stage 1, ..., stage L]
+    'max_prtcls', [inf,inf], ... [stage 1, ..., stage L]
     'prob_inherit', 0.7, ...     
     'temp', 36, ... (degrees celsius)    
     'viscos', 1.0005E-3,... (kiloggrams / (meter*second))      
@@ -217,60 +217,6 @@ fprintf("The mean and variance of the pair correlation coefficient in each run:"
 format SHORTE
 disp(total.cell_pair_cor_coef)
 
-% Find limits for the x and y-axis: the largest values to be plotted, given
-% that plots are being plotted every hour
-hour_indices = 0:floor(1/PARAMETERS.tstep_duration):total_tsteps;
-hour_indices = hour_indices + 1;
-hourly_total.cell_c_o_p = total.cell_c_o_p(:,hour_indices,:);
-interact_max = max(hourly_total.cell_c_o_p(:,:,2),[],'all');
-internal_max = max(hourly_total.cell_c_o_p(:,:,3),[],'all');
-x_max = max(interact_max,internal_max);
-local_max = zeros(1,length(hour_indices));
-for index = 2:length(hour_indices)
-    [cells_interact,~] = histcounts(hourly_total.cell_c_o_p(:,index,2));
-    [cells_internal,~] = histcounts(hourly_total.cell_c_o_p(:,index,3));
-    if ~isempty(cells_interact) && ~isempty(cells_internal)
-        local_max(index) = max([cells_interact(2:end), cells_internal(2:end)]);
-    elseif ~isempty(cells_interact)
-        local_max(index) = max(cells_interact(2:end));
-    elseif ~isempty(cells_internal)
-        local_max(index) = max(cells_internal(2:end));
-    end
-end
-y_max = max([local_max,PARAMETERS.initial_num_cells]);
-
-fig2 = figure(2);
-set(fig2, 'Visible', 'off');
-
-for time_plot = 1:length(hour_indices)
-    tstep = (time_plot-1)/PARAMETERS.tstep_duration; % equivalent timestep index
-    N_tstep = total.cell_population(tstep+1); % total number of cells across runs
-    
-    % FREQUENCY HISTOGRAMS
-    set(0,'CurrentFigure',fig2)
-    subplot(5,floor(PARAMETERS.simulation_duration/5)+1,time_plot);
-    % FREQUENCY OF CELLS WITH NUMS OF PARTICLES INTERACTING OVER TIME
-    histogram(hourly_total.cell_c_o_p(1:N_tstep,time_plot,2),...
-        'FaceColor', [0,0,1], 'FaceAlpha', 0.2);
-    hold on;
-    % FREQUENCY OF CELLS WITH NUMS OF PARTICLES INTERNALISED OVER TIME
-    histogram(hourly_total.cell_c_o_p(1:N_tstep,time_plot,3),...
-        'FaceColor', [1,0,0], 'FaceAlpha', 0.2);
-    hold off;
-    xlim([0,x_max]);
-    %ylim([0,y_max]);
-    title(['At ' num2str(time_plot-1) ' hour/s']);
-    xlabel('Number of particles');
-    ylabel('Cell frequency');
-    if time_plot==1
-        legend('Interacting','Internalised');
-    end
-end
-sgtitle(fig2, 'Frequency of cells with certain numbers of interacting/internalised particles over time')
-fig2.Position = [100,100,1300,700];
-savefig(fig2, [PARAMETERS.folder_path '/Frequency_histograms'], 'compact')
-saveas(fig2, [PARAMETERS.folder_path '/Frequency_histograms'], 'png')
-
 % Plot associated Vs interacting+internalised cells over time
 means = zeros(3,total_tsteps+1);
 % Average number interacting particles per cell over all runs in a timestep
@@ -313,310 +259,37 @@ st_dev2 = squeeze(sqrt(variances(2,:,:))); % standard deviations between runs
 upper2 = means + st_dev2;
 lower2 = means - st_dev2;
 
-fig7=figure(7);
-set(fig7, 'Visible', 'off');
-subplot(1,2,1)
-bar(binrng, means(3,:), 'r')
-hold on
-bar(binrng, means(1,:), 'b')
-hold off
-legend('Internalised','Interacting','Location','Best')
-title('Stacked histogram')
-xlabel('time $t$ hours', 'Interpreter', 'latex');
-ylabel('Average number of particles per cell');
 
-subplot(1,2,2)
-plot(binrng,means(2,:),'r',binrng,means(1,:),'b');
-hold on
-plot(binrng,means(3,:),'Color',[.5 0 .5])
-patch([binrng fliplr(binrng)], [upper1(1,:) fliplr(lower1(1,:))], [0 0 1], 'FaceAlpha', 0.2, 'EdgeColor', 'w', 'LineStyle', '-')
-patch([binrng fliplr(binrng)], [upper1(2,:) fliplr(lower1(2,:))], [1 0 0], 'FaceAlpha', 0.2, 'EdgeColor', 'w', 'LineStyle', '-')
-patch([binrng fliplr(binrng)], [upper1(3,:) fliplr(lower1(3,:))], [.5 0 .5], 'FaceAlpha', 0.2, 'EdgeColor', 'w', 'LineStyle', '-')
-plot(binrng,lower2(1,:),'b--',binrng,upper2(1,:),'b--', ...
-    binrng,lower2(2,:),'r--',binrng,upper2(2,:),'r--');
-plot(binrng,lower2(3,:),'Color',[.5 0 .5],'LineStyle', '--')
-plot(binrng,upper2(3,:),'Color',[.5 0 .5],'LineStyle', '--')
-exp_cdf = @(lambda,tdata) 1-exp(-lambda.*tdata);
-
-%plot(binrng(2:end),exp_cdf(est_lambda1.using_diffs,binrng(2:end)),'g:')
-hold off
-ylim([0 max(upper1,[],'all')])
-legend('Internalised','Interacting','Associated (either)',...
-    'Std. dev. btwn all cells & runs', '" "', '" "', ...
-    'Std. dev. btwn run means', '','" "','', '" "', 'Location','Best')
-title('Separate trends')
-xlabel('time $t$ hours', 'Interpreter', 'latex');
-
-subplot(1,2,1)
-ylim([0 max(upper1,[],'all')])
-sgtitle('Average number of particles associated per cell')
-fig7.Position = [100,100,1300,700];
-savefig(fig7, [PARAMETERS.folder_path '/Associated_vs_internalised'], 'compact')
-saveas(fig7, [PARAMETERS.folder_path '/Associated_vs_internalised'], 'png')
-
+% Plot the dosage distribution (the frequency of having so many particles
+% bound/internalised) after every X hours
+create_dosage_distribs(4, total_tsteps, PARAMETERS, total)
 
 % Plot the mean Pair Correlation Coefficient over time (the mean PCC at
 % each timestep across all of the run PCCs and the variance in the mean)
-fig8=figure(8);
-set(fig8, 'Visible', 'off');
-yyaxis left
-plot(binrng,mean(runs.cell_pair_cor_coef,1))
-ylabel('Mean PCC of runs')
-up = mean(runs.cell_pair_cor_coef,1) + var(runs.cell_pair_cor_coef,1);
-low = mean(runs.cell_pair_cor_coef,1) - var(runs.cell_pair_cor_coef,1);
-hold on
-patch([binrng fliplr(binrng)], [up fliplr(low)], [0 0 1], 'FaceAlpha', 0.2, 'EdgeColor', 'w', 'LineStyle', '-')
-% Plot the average change in confluence over time
-yyaxis right
-plot(binrng, total.cell_population./(PARAMETERS.culture_dim^2 * num_runs).*100)
-ylabel('% confluence')
-hold off
-xlabel('time $t$ hours', 'Interpreter', 'latex')
-title('Pair correlation coefficient against dish confluence over time')
-if PARAMETERS.EWT_move == inf
-    subtitle('Without motility events')
-else
-    subtitle('With motility events')
+PCC_against_confluence
+
+[~,~,L]=size(total.cell_c_o_p);
+
+% In the 2 parameter case with or without a carrying capacity on the last 
+% transition (internalisation).
+if L==3 && ~any(PARAMETERS.max_prtcls(1:end-1)~=inf)
+    % Heuristic estimation of lambda1, lambda2 and CC if relevant
+    heuristic_estimates_2params_CCintern
+    % Plot the mean associated/internalised/interacting particles over all
+    % of the runs over time with standard deviation and analytical
+    % distributions from heuristic estimates
+    parameter_plots_with_bounds_script
+    % Print figures
+    figure(fig27)
+    figure(fig28)
+    figure(fig29)
+    figure(fig30)
 end
-fig8.Position = [100,100,1300,700];
-savefig(fig8, [PARAMETERS.folder_path '/PCC_and_confluence'], 'compact')
-saveas(fig8, [PARAMETERS.folder_path '/PCC_and_confluence'], 'png')
-%%
-% HEURISTIC ESTIMATES
-%   of tmax_noCC, lambda1, lambda2 and CC
-% Use the provided data on the mean numbers of particles per cell that are 
-% free, interacting and internalised and estimate the parameters of the 
-% exponential and hypoexponential distributions that the inter-event times 
-% follow (of particle association and particle internalisation respectively).
-
-fprintf("\nHeuristic estimates for lambda from free to stage 1 and from stage 1 to stage 2: \n(units are per hour)\n")
-
-% The mean number of free particles available to a cell at the beginning of
-% each timestep is the number that haven't been associated on the previous
-% timestep divided amongst the lattice sites. 
-freePrtcls_start_of_t = (PARAMETERS.prtcls_per_cell * PARAMETERS.initial_num_cells .* ...
-    ones(1,length(binrng)) - (means(3,:) .* total.cell_population) ./ num_runs) ./ ...
-    (PARAMETERS.culture_dim^2);
-% Free particles left over when association is the mean data minus 1
-% standard deviation (std. dev.) - i.e. lower bound association and thus
-% upper bound free particles
-freePrtcls_start_of_tUP = (PARAMETERS.prtcls_per_cell * PARAMETERS.initial_num_cells .* ...
-    ones(1,length(binrng)) - (lower1(3,:) .* total.cell_population) ./ num_runs) ./ ...
-    (PARAMETERS.culture_dim^2);
-% Free particles left over when association is the mean data plus 1
-% standard deviation (std. dev.) - i.e. upper bound association and thus
-% lower bound free particles.
-freePrtcls_start_of_tLO = (PARAMETERS.prtcls_per_cell * PARAMETERS.initial_num_cells .* ...
-    ones(1,length(binrng)) - (upper1(3,:) .* total.cell_population) ./ num_runs) ./ ...
-    (PARAMETERS.culture_dim^2);
-% No interaction occur prior to 0 hours, so the entry for '0 hours' 
-% (timestep 0 or typically index 1) is in fact the free particles available 
-% at the beginning of timestep 1 (typically index 2) from 0-0.1667 hours 
-% and so on. The last entry is simply the number of free particles 
-% available per cell at the end of the simulation.
-freePrtcls_start_of_t = freePrtcls_start_of_t(1:(end-1)); % for timestep 1, 2, ...
-freePrtcls_start_of_tUP = freePrtcls_start_of_tUP(1:(end-1)); 
-freePrtcls_start_of_tLO = freePrtcls_start_of_tLO(1:(end-1)); 
-
-% The mean number of particles interacting with a cell at the beginning of
-% each timestep is the number that are recorded in the previous timestep.
-% I.e. the interacting particles available at the beginning of timestep 1
-% (typically index 2) from 0-0.1667 hours is the number recorded as
-% interacting at the end of timestep 0 (typically index 1) at 0 hours.
-interactPrtcls_start_of_t = means(1,1:(end-1)); % for timestep 1, 2, ...
-% Interacting particles corresponding to upper bound association and lower
-% bound internalisation - i.e. upper bound interacting particles
-interactPrtcls_start_of_tUP = upper1(3,:)-lower1(2,:); % full array
-% Interacting particles corresponding to lower bound association and upper
-% bound internalisation - i.e. lower bound interacting particles
-interactPrtcls_start_of_tLO = lower1(3,:)-upper1(2,:); % full array
-
-% ESTIMATE LAMBDA 1
-%   via DIFFERENCES method
-% Estimate lambda_1, the parameter for the exponential distribution that
-% describes the inter-association times of particles per cell, by
-% calculating the mean fraction of association events that occur (the
-% number that do occur in a timestep over the number that could occur -
-% i.e., the number of free particles) over the duration of time passed.
-est_lambda1.using_diffs = (means(3,2:end)- means(3,1:(end-1)))./... new in tstep 1, 2, ...
-    (binrng(2).*freePrtcls_start_of_t); % free at the beginning of tstep 1, 2, ...
-est_lambda1.using_diffs_mean = w8mean(est_lambda1.using_diffs,means(3,2:end));
-% Upper bound
-est_lambda1UP.using_diffs = (upper1(3,2:end)- upper1(3,1:(end-1)))./... 
-    (binrng(2).*freePrtcls_start_of_tLO); 
-est_lambda1UP.using_diffs_mean = w8mean(est_lambda1UP.using_diffs,upper1(3,2:end));
-% Lower bound
-est_lambda1LO.using_diffs = (lower1(3,2:end)- lower1(3,1:(end-1)))./... 
-    (binrng(2).*freePrtcls_start_of_tUP); 
-est_lambda1LO.using_diffs_mean = w8mean(est_lambda1LO.using_diffs,lower1(3,2:end));
-
-% ESTIMATE LAMBDA 1
-%   via MLE method
-smth_assoc = smooth(means(3,:))'; % number associated at end of tstep 0, 1, 2, ...
-est_lambda1.MLE = smth_assoc(2:end)./ ... % num assoc at end of tstep 1, 2, ...
-    (binrng(2:end).*PARAMETERS.prtcls_per_cell);% time at end of tstep 1, 2, ...
-est_lambda1.MLE_mean = w8mean(est_lambda1.MLE,means(3,2:end));
-% Upper bound
-smth_assocUP = smooth(upper1(3,:))'; 
-est_lambda1UP.MLE = smth_assocUP(2:end)./ ... 
-    (binrng(2:end).*PARAMETERS.prtcls_per_cell);
-est_lambda1UP.MLE_mean = w8mean(est_lambda1UP.MLE,upper1(3,2:end));
-% Lower bound
-smth_assocLO = smooth(lower1(3,:))'; 
-est_lambda1LO.MLE = smth_assocLO(2:end)./ ...
-    (binrng(2:end).*PARAMETERS.prtcls_per_cell); 
-est_lambda1LO.MLE_mean = w8mean(est_lambda1LO.MLE,lower1(3,2:end));
-
-% CDF of hypoexponential distribution
-CDF.hypoexp = @(l1, l2, t) 1 - 1./(l2-l1) .* (l2 .* exp(-l1 .* t) - l1 .* exp(-l2 .* t));
-CDF.hypoexp_MLEl1 = @(l2,t) CDF.hypoexp(est_lambda1.MLE_mean,l2,t); 
-CDF.hypoexp_MLEl1UP = @(l2,t) CDF.hypoexp(est_lambda1UP.MLE_mean,l2,t); % Upper bound
-CDF.hypoexp_MLEl1LO = @(l2,t) CDF.hypoexp(est_lambda1LO.MLE_mean,l2,t); % Lower bound
-CDF.hypoexp_MLEl1_tstep = @(l2) CDF.hypoexp_MLEl1(l2,PARAMETERS.tstep_duration); 
-CDF.hypoexp_MLEl1UP_tstep = @(l2) CDF.hypoexp_MLEl1UP(l2,PARAMETERS.tstep_duration); % Upper bound
-CDF.hypoexp_MLEl1LO_tstep = @(l2) CDF.hypoexp_MLEl1LO(l2,PARAMETERS.tstep_duration); % Lower bound
-% CDF of exponential distribution
-CDF.exp = @(l, t) 1 - exp(- l .*t);
-CDF.exp_tstep = @(l) CDF.exp(l,PARAMETERS.tstep_duration);
-% Two guesses to feed into fzero in case one gives lambda2=lambda1
-guess = [est_lambda1.MLE_mean/3 est_lambda1.MLE_mean*3]; % mean
-guessUP = [est_lambda1UP.MLE_mean/3 est_lambda1UP.MLE_mean*3]; % Upper bound
-guessLO = [est_lambda1LO.MLE_mean/3 est_lambda1LO.MLE_mean*3]; % Lower bound
-
-% ESTIMATE TIME AT WHICH CC KICKS IN (TMAX_NOCC) and LAMBDA 2
-%   via DISTRIBUTION method
-[tmax_noCC,est_lambda2.distrib_mean,est_lambda2.distrib] = ... 
-    tmax_l2_from_hypoexpCDF(binrng,CDF.hypoexp_MLEl1,means,...
-    PARAMETERS,guess,est_lambda1.MLE_mean,tol_l2);
-% Upper bound lambda2 (assuming lower bound lambda1)
-[~,est_lambda2UP.distrib_mean,est_lambda2UP.distrib] = ... 
-    tmax_l2_from_hypoexpCDF(binrng,CDF.hypoexp_MLEl1LO,upper1,...
-    PARAMETERS,guessLO,est_lambda1LO.MLE_mean,tol_l2);
-% Lower bound lambda2 (assuming upper bound lambda1)
-[~,est_lambda2LO.distrib_mean,est_lambda2LO.distrib] = ... 
-    tmax_l2_from_hypoexpCDF(binrng,CDF.hypoexp_MLEl1UP,lower1,...
-    PARAMETERS,guessUP,est_lambda1UP.MLE_mean,tol_l2);
-
-% ESTIMATE LAMBDA 2
-%   via MIX method
-[est_lambda2.mix_mean,est_lambda2.mix] = l2_from_mixMethod(...
-    binrng,CDF.hypoexp_MLEl1_tstep,CDF.exp_tstep,...
-    means,freePrtcls_start_of_t,interactPrtcls_start_of_t,...
-    PARAMETERS,guess,est_lambda1.MLE_mean,tmax_noCC);
-% Upper bound lambda2 (assuming lower bound lambda1)
-[est_lambda2UP.mix_mean,est_lambda2UP.mix] = l2_from_mixMethod(...
-    binrng,CDF.hypoexp_MLEl1LO_tstep,CDF.exp_tstep,...
-    upper1,freePrtcls_start_of_tUP,interactPrtcls_start_of_tLO(1:end-1),...
-    PARAMETERS,guessLO,est_lambda1LO.MLE_mean,tmax_noCC);
-% Lower bound lambda2 (assuming upper bound lambda1)
-[est_lambda2LO.mix_mean,est_lambda2LO.mix] = l2_from_mixMethod(...
-    binrng,CDF.hypoexp_MLEl1UP_tstep,CDF.exp_tstep,...
-    lower1,freePrtcls_start_of_tLO,interactPrtcls_start_of_tUP(1:end-1),...
-    PARAMETERS,guessUP,est_lambda1UP.MLE_mean,tmax_noCC);
-
-tsteps = 0:PARAMETERS.tstep_duration:tmax_noCC; 
-
-% ESTIMATE LAMBDA 2
-%   via DIFFERENCES method
-[est_lambda2.using_diffs_mean,est_lambda2.using_diffs] = ...
-    l2_from_diffsMethod(tsteps,means,tol,freePrtcls_start_of_t, ...
-    interactPrtcls_start_of_t,PARAMETERS,est_lambda1.using_diffs_mean);
-% Upper bound lambda2 (assuming lower bound lambda1)
-[est_lambda2UP.using_diffs_mean,est_lambda2UP.using_diffs] = ...
-    l2_from_diffsMethod(tsteps,interactPrtcls_start_of_tLO,tol,freePrtcls_start_of_tUP, ...
-    interactPrtcls_start_of_tLO(1:end-1),PARAMETERS,est_lambda1LO.using_diffs);
-% Lower bound lambda2 (assuming upper bound lambda1)
-[est_lambda2LO.using_diffs_mean,est_lambda2LO.using_diffs] = ...
-    l2_from_diffsMethod(tsteps,interactPrtcls_start_of_tUP,tol,freePrtcls_start_of_tLO, ...
-    interactPrtcls_start_of_tUP(1:end-1),PARAMETERS,est_lambda1UP.using_diffs);
-
-% CALCULATE ACTUAL RATES
-[l1,l2] = input_EWT_from_fraction(...
-    PARAMETERS.EWTs_internalise.values(1),...
-    PARAMETERS.EWTs_internalise.values(2),...
-    PARAMETERS.EWTs_internalise.values(3));
-
-% PRINT RATES
-fprintf("\nLAMBDA 1: \nACTUAL %5.4e",l1)
-fprintf('\nMETHOD \t\tMEAN \t\tLOWER ESTIMATE \tUPPER ESTIMATE')
-fprintf('\nDifferences \t%5.4e \t%5.4e \t%5.4e',...
-    est_lambda1.using_diffs_mean, est_lambda1LO.using_diffs_mean, ...
-    est_lambda1UP.using_diffs_mean);
-fprintf('\nMLE \t\t%5.4e \t%5.4e \t%5.4e \n',...
-    est_lambda1.MLE_mean, est_lambda1LO.MLE_mean, ...
-    est_lambda1UP.MLE_mean);
-
-fprintf("\nLAMBDA 2: \nACTUAL %5.4e",l2)
-fprintf('\nMETHOD \t\tMEAN \t\tLOWER ESTIMATE \tUPPER ESTIMATE')
-fprintf('\nDifferences \t%5.4e \t%5.4e \t%5.4e',...
-    est_lambda2.using_diffs_mean, est_lambda2LO.using_diffs_mean, ...
-    est_lambda2UP.using_diffs_mean);
-fprintf('\nDistribution \t%5.4e \t%5.4e \t%5.4e',...
-    est_lambda2.distrib_mean, est_lambda2LO.distrib_mean, ...
-    est_lambda2UP.distrib_mean);
-fprintf('\nMix \t\t%5.4e \t%5.4e \t%5.4e\n',...
-    est_lambda2.mix_mean, est_lambda2LO.mix_mean, ...
-    est_lambda2UP.mix_mean);
-
-% ESTIMATE CARRYING CAPACITY (CC) **if there is one**
-%   via DIFFERENCES method
-%   via DYNAMIC RATE calculated from DIFFERENCES METHOD
-%   via DYNAMIC RATE calculated from MIX METHOD
-if any(PARAMETERS.max_prtcls ~= inf) 
-    % The number of internalised particles per cell at the start of a 
-    % timestep is the number of internalised particles per cell at the end
-    % of the previous timestep.
-    internalPrtcls_start_of_t = means(2,1:(end-1)); % for timestep 1, 2, ...
-    internalPrtcls_start_of_tUP = upper1(2,1:(end-1)); % for timestep 1, 2, ...
-    internalPrtcls_start_of_tLO = lower1(2,1:(end-1)); % for timestep 1, 2, ...
-    
-    % Prepare input for CC_GIVEN_FRACTION
-    using_diffs = gradient(means(2,2:end),PARAMETERS.tstep_duration) ./ ... 
-        (interactPrtcls_start_of_t .* est_lambda2.using_diffs_mean);
-    dynamic_diffs= [0 est_lambda2.using_diffs]./est_lambda2.using_diffs_mean;
-    dynamic_mix= est_lambda2.mix./est_lambda2.mix_mean;
-    frction = [using_diffs; dynamic_diffs; dynamic_mix];
-    methods = {'using_diffs','dynamic_diffs','dynamic_mix'};
-
-    est_CC = CC_given_fraction(methods,internalPrtcls_start_of_t,frction, PARAMETERS);
-
-    % For the upper bound
-    using_diffsUP = gradient(upper1(2,2:end),PARAMETERS.tstep_duration) ./ ... 
-        (interactPrtcls_start_of_tLO(2:end) .* est_lambda2UP.using_diffs_mean);
-    dynamic_diffsUP= [0 est_lambda2UP.using_diffs]./est_lambda2UP.using_diffs_mean;
-    dynamic_mixUP= est_lambda2UP.mix./est_lambda2UP.mix_mean;
-    frctionUP = [using_diffs; dynamic_diffs; dynamic_mix];
-    est_CCUP = CC_given_fraction(methods,internalPrtcls_start_of_tUP,frctionUP, PARAMETERS);
-
-    % For the lower bound
-    using_diffsLO = gradient(lower1(2,2:end),PARAMETERS.tstep_duration) ./ ... 
-        (interactPrtcls_start_of_tUP(2:end) .* est_lambda2LO.using_diffs_mean);
-    dynamic_diffsLO= [0 est_lambda2UP.using_diffs]./est_lambda2UP.using_diffs_mean;
-    dynamic_mixLO= est_lambda2UP.mix./est_lambda2UP.mix_mean;
-    frctionLO = [using_diffs; dynamic_diffs; dynamic_mix];
-    est_CCLO = CC_given_fraction(methods,internalPrtcls_start_of_tLO,frctionLO, PARAMETERS);
-    
-    % PRINT CARRYING CAPACITIES
-    fprintf("\n\nHeuristic estimates for carrying capacity (CC): \n(units are particles)\n")
-    
-    fprintf("\nCARRYING CAPACITY: \nACTUAL %5.3f",PARAMETERS.max_prtcls(end))
-    fprintf('\nMETHOD \t\t\t\tMEAN \tLOWER ESTIMATE \tUPPER ESTIMATE')
-    fprintf('\nDifferences \t\t\t%5.3f \t%5.3f \t\t%5.3f',...
-        est_CC.using_diffs_mean, est_CCLO.using_diffs_mean, est_CCUP.using_diffs_mean);
-    fprintf('\nDynamic using differences \t%5.3f \t%5.3f \t\t%5.3f',...
-        est_CC.dynamic_diffs_mean, est_CCLO.dynamic_diffs_mean, est_CCUP.dynamic_diffs_mean);
-    fprintf('\nDynamic using mix \t\t%5.3f \t%5.3f \t\t%5.3f\n',...
-        est_CC.dynamic_mix_mean, est_CCLO.dynamic_mix_mean, est_CCUP.dynamic_mix_mean);
-end
-
-parameter_plots_with_bounds_script
 
 % Print figures
 figure(fig2)
-figure(fig7)
 figure(fig8)
-figure(27)
-figure(28)
+
 
 % Save the workspace
 save([PARAMETERS.folder_path '/variables_' num2str(PARAMETERS.prtcls_per_cell) ...
