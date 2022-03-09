@@ -190,7 +190,7 @@ end
 %%% INITIALISE VARIABLES, CONSTANTS & VISUAL %%%
 
 N_tstep = PARAMETERS.initial_num_cells; % the number of cells at timestep t
-prtcls_initial = N_tstep * PARAMETERS.prtcls_per_cell; % the number of particles initially
+prtcls_initial = PARAMETERS.culture_dim^2 * PARAMETERS.prtcls_per_cell; % the number of particles initially
 total_sites = PARAMETERS.culture_dim ^2; % total number of possible positions in petri dish
 % Number of timesteps of duration tstep_duration that fit into
 % simulation_duration number of hours.
