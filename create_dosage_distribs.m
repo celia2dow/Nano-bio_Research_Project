@@ -48,11 +48,15 @@ for time_plot = 1:length(Xhour_indices)
     title(['At ' num2str(time_plot*X) ' hours']);
     xlabel('Number of particles');
     ylabel('Cell frequency');
+    pbaspect([1 1 1]);
     if time_plot==1
         legend('Interacting','Internalised');
     end
 end
+
+% Save figure
 sgtitle(fig2, 'Frequency of cells with certain numbers of interacting/internalised particles over time')
-fig2.Position = [100,100,1300,700];
+fig2.Position = [100,100,1100,700];
 saveas(fig2, [PARAMETERS.folder_path '/Dosage_distribs' num2str(X) 'hours'], 'eps')
 saveas(fig2, [PARAMETERS.folder_path '/Dosage_distribs' num2str(X) 'hours'], 'png')
+figure(fig2)
