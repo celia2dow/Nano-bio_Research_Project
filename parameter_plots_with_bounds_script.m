@@ -15,6 +15,7 @@ plot(binrng(1:end-1), est_lambda1UP.using_diffs, 'r:')
 plot(binrng(1:end-1), est_lambda1LO.using_diffs, 'r:')
 hold off
 title('\lambda_1 calculated via MLE (black) and via differences (red)')
+pbaspect([1 1 1])
 
 % Lambda 2 values
 fig28 = figure(28);
@@ -35,11 +36,13 @@ plot(binrng,est_lambda2LO.distrib, 'g:')
 ylim([min(est_lambda2LO.distrib), max(est_lambda2UP.distrib)])
 hold off
 title('\lambda_2 calculated via differences (red), distribution (green) and mix (blue)')
+pbaspect([1 1 1])
 
 % CCvalues
-fig29 = figure(29);
-set(fig29, 'Visible', 'off');
-if any(PARAMETERS.max_prtcls ~= inf) 
+if any(PARAMETERS.max_prtcls ~= inf)
+    fig29 = figure(29);
+    set(fig29, 'Visible', 'off');
+   
     % Differences method
     plot(binrng(1:end-1),est_CC.using_diffs, 'r--', 'LineWidth', 1.5)
     hold on
@@ -56,6 +59,13 @@ if any(PARAMETERS.max_prtcls ~= inf)
     ylim([0 2*PARAMETERS.max_prtcls(end)])
     hold off
     title('CC calculated via differences (red), dynamic differences (magenta) and dynamic mix (cyan)')
+    pbaspect([1 1 1])
+
+    fig29.Position = [100,100,1300,700];
+    saveas(fig29, [PARAMETERS.folder_path '/CC_eror'], 'eps')
+    saveas(fig29, [PARAMETERS.folder_path '/CC_eror'], 'png')
+
+    figure(fig29)
 end
 
 % Comparing data to estimate rates:
@@ -138,6 +148,7 @@ ylim([0 max(upper1,[],'all')])
 title(tit_str);
 subtitle(sub_str);
 xlabel('time $t$ hours', 'Interpreter', 'latex');
+pbaspect([1 1 1])
 
 % Save figures
 fig27.Position = [100,100,1300,700];
@@ -148,16 +159,10 @@ fig28.Position = [100,100,1300,700];
 saveas(fig28, [PARAMETERS.folder_path '/lambda2_eror'], 'eps')
 saveas(fig28, [PARAMETERS.folder_path '/lambda2_eror'], 'png')
 
-fig29.Position = [100,100,1300,700];
-saveas(fig29, [PARAMETERS.folder_path '/CC_eror'], 'eps')
-saveas(fig29, [PARAMETERS.folder_path '/CC_eror'], 'png')
-
 fig30.Position = [100,100,1300,700];
-pbaspect([1 1 1])
 saveas(fig30, [PARAMETERS.folder_path '/Analytical_distribs'], 'eps')
 saveas(fig30, [PARAMETERS.folder_path '/Analytical_distribs'], 'png')
 
 figure(fig27)
 figure(fig28)
-figure(fig29)
 figure(fig30)
