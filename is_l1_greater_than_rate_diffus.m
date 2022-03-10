@@ -1,7 +1,9 @@
-function check = is_l1_greater_than_rate_diffus(PARAMETERS)
+function [check,l2] = is_l1_greater_than_rate_diffus(PARAMETERS)
 % IS_L1_GREATER_THAN_RATE_DIFFUS checks if the input parameters for 
 % internalisation are appropriate. I.e. it checks that they don't require
-% that the probability of binding once hit be greater than 1.
+% that the probability of binding once hit be greater than 1. It returns
+% this check (1 for inappropriate, 0 for apppropriate) as well as a
+% warning.
 
 % CALCULATE RATE OF DIFFUSIVITY (PER HOUR)
 % Rate of particle diffusivity (i.e. of particle hitting).
@@ -48,6 +50,7 @@ end
 % CHECK IF L1 IS LARGER THAN RATE_DIFFUS
 if l1 > rate_diffus
     check = 1;
+    fprintf("\nERROR: the input probability of binding once hit is >1\n")
 else
     check = 0;
 end
