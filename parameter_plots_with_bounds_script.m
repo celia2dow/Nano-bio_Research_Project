@@ -126,22 +126,22 @@ interactsUP = assoc - internsLO;
 % Plot ALL
 p7 = plot(binrng,assoc,'k--', 'LineWidth', 1.2,...
     'DisplayName', 'Mean analytic distributions with heuristic estimates');
-p8 = plot(binrng,assocLO,'k:', 'LineWidth', 1.2,...
-    'DisplayName', 'Lower/upper bound analytic distributions with heuristic estimates');
-p9 = plot(binrng,assocUP,'k:', 'LineWidth', 1.2);
-hasbehavior(p9,'legend',false);
+%p8 = plot(binrng,assocLO,'k:', 'LineWidth', 1.2,...
+%    'DisplayName', 'Lower/upper bound analytic distributions with heuristic estimates');
+%p9 = plot(binrng,assocUP,'k:', 'LineWidth', 1.2);
+%hasbehavior(p9,'legend',false);
 p10 = plot(binrng,interns,'k--', 'LineWidth', 1.2);
 hasbehavior(p10,'legend',false);
-p11 = plot(binrng,internsLO,'k:', 'LineWidth', 1.2);
-hasbehavior(p11,'legend',false);
-p12 = plot(binrng,internsUP,'k:', 'LineWidth', 1.2);
-hasbehavior(p12,'legend',false);
+%p11 = plot(binrng,internsLO,'k:', 'LineWidth', 1.2);
+%hasbehavior(p11,'legend',false);
+%p12 = plot(binrng,internsUP,'k:', 'LineWidth', 1.2);
+%hasbehavior(p12,'legend',false);
 p13 = plot(binrng,interacts,'k--', 'LineWidth', 1.2);
 hasbehavior(p13,'legend',false);
-p14 = plot(binrng,interactsLO,'k:', 'LineWidth', 1.2);
-hasbehavior(p14,'legend',false);
-p15 = plot(binrng,interactsUP,'k:', 'LineWidth', 1.2);
-hasbehavior(p15,'legend',false);
+%p14 = plot(binrng,interactsLO,'k:', 'LineWidth', 1.2);
+%hasbehavior(p14,'legend',false);
+%p15 = plot(binrng,interactsUP,'k:', 'LineWidth', 1.2);
+%hasbehavior(p15,'legend',false);
 
 legend('Location','Best')
 ylim([0 max(upper1,[],'all')])
