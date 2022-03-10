@@ -3,7 +3,7 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 % in a 2.D cell monolayer within a culture dish as they interact with and
 % internalised particles.
 %
-%   This is the work of Celia Dowling 23/02/22
+%   This is the work of Celia Dowling 10/03/22
 %
 %   The input argument is a structure PARAMETERS containing the fields:
 %
@@ -13,7 +13,9 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 %                                   EWT_move.
 %       initial_num_cells           Initial number of cells in the lattice.
 %       prtcls_per_cell             Number of particles added to the cell
-%                                   monolayer per cell
+%                                   monolayer per lattice site and thus the
+%                                   total number of particles available to
+%                                   each cell regardless of confluence
 %       cell_diam (micrometers)     Average diameter of particlular cell-type. 
 %       culture_dim (cell diameters) Lattice dimensions are culture_dim by culture_dim.
 %       culture_media_height (mm)   The height of the cell culture media
@@ -36,14 +38,15 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 %                                   for 1 particle to transition out of 
 %                                   each stage in the cell-particle 
 %                                   interaction model. input_type will be 
-%                                   either "fraction" or "EWT"
+%                                   either "fraction", "EWT", or
+%                                   "prob_and_rates"
 %       EWTs_internalise.values     if input_type == "fraction":
 %                                       [fraction associated, fraction
 %                                       internalised, number of hours of 
 %                                       incubation after which these
 %                                       fractions are desired to be
 %                                       observed] ... at confluence without
-%                                       carrying capacity
+%                                       carrying capacity. 
 %                                   if input_type == "EWT":
 %                                       e.g. [free or stage 0 (hit), stage 
 %                                       1 (bound), ..., stage L-1] (hours) 
@@ -60,6 +63,18 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 %                                       stage and rows indicating cell 
 %                                       phase. Elements must be greater 
 %                                       than or equal to tstep_duration. 
+%                                   if input_type == "prob_and_rates":
+%                                       [probability of transitioning from
+%                                       stage 0 (hit) to stage 1 (bound) 
+%                                       (i.e. probability of binding once
+%                                       hit), rate from stage 1 to stage 2
+%                                       (per hour), rate from stage 2 to 
+%                                       stage 3 (per hour), ..., rate from
+%                                       stage L-1 to stage L (internalised,
+%                                       per hour)] ... this will result in
+%                                       a rate from free to stage 1 of
+%                                       EWTs_internalise.values(1) *
+%                                       rate_diffus (per timestep)
 %                                   For a petri dish saturated with cells:
 %                                   Given a certain percentage association 
 %                                   over 24 hours (a), choose values(1) 
@@ -154,7 +169,8 @@ rates_proliferate = PARAMETERS.tstep_duration./PARAMETERS.EWTs_proliferate;
 K = length(rates_proliferate); 
 
 % Check to see if the desired association/internalisation fractions were
-% given or the EWTs directly:
+% given or the EWTs directly or the probability of binding and the rates
+% (per hour):
 if PARAMETERS.EWTs_internalise.input_type == "EWT"
     % A list of L rates of particles transitioning between stages of the cell-
     % particle interaction model unaffected by carrying capacity (e.g. free to 
@@ -164,6 +180,9 @@ if PARAMETERS.EWTs_internalise.input_type == "EWT"
     % phase.
     rates_internalise = PARAMETERS.tstep_duration./...
         PARAMETERS.EWTs_internalise.values;
+    % Convert the first rate from the rate of binding per timestep to the
+    % probability of binding once hit by dividing by the rate of hitting.
+    rates_internalise(:,1) = rates_internalise(:,1)./rate_diffus;
 elseif PARAMETERS.EWTs_internalise.input_type == "fraction"
     % Calculate the rates from the desired observed fraction
     % associated/internalised at confluence without carrying capacity.
@@ -172,11 +191,22 @@ elseif PARAMETERS.EWTs_internalise.input_type == "fraction"
         PARAMETERS.EWTs_internalise.values(2), ...
         PARAMETERS.EWTs_internalise.values(3));
     rates_internalise = PARAMETERS.tstep_duration.*[l1,l2];
+    % Convert the first rate from the rate of binding per timestep to the
+    % probability of binding once hit by dividing by the rate of hitting.
+    rates_internalise(:,1) = rates_internalise(:,1)./rate_diffus;
+elseif PARAMETERS.EWTs_internalise.input_type == "prob_and_rates"
+    % If the input are just the rates (per hour) from one stage to the
+    % next, with the first value being the probability of binding once hit
+    % (and therefore not needing scaling by the timestep duration)
+    rates_internalise = PARAMETERS.tstep_duration.*...
+        PARAMETERS.EWTs_internalise.values;
+    rates_internalise(:,1) = rates_internalise(:,1) ./...
+        PARAMETERS.tstep_duration;
 end
 
-% Convert the first rate from the rate of binding per timestep to the
-% probability of binding once hit by dividing by the rate of hitting.
-rates_internalise(:,1) = rates_internalise(:,1)./rate_diffus;
+% Check if the initial probability of binding once hit is greater than 1
+rates_internalise(rates_internalise(:,1)>1,1)=1;
+
 % Check how many stages in the cell-particle interactions model there are
 % and whether or not the user has defined different rates for different
 % cell-proliferation phases (matrix input) or not (vector input).
