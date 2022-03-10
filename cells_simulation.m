@@ -3,7 +3,7 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 % in a 2.D cell monolayer within a culture dish as they interact with and
 % internalised particles.
 %
-%   This is the work of Celia Dowling 10/03/22
+%   This is the work of Celia Dowling 11/03/22
 %
 %   The input argument is a structure PARAMETERS containing the fields:
 %
@@ -204,8 +204,9 @@ elseif PARAMETERS.EWTs_internalise.input_type == "prob_and_rates"
         PARAMETERS.tstep_duration;
 end
 
-% Check if the initial probability of binding once hit is greater than 1
-rates_internalise(rates_internalise(:,1)>1,1)=1;
+% Check if any of the rates (i.e. probabilities) are greater than 1. If
+% they are, cap them at 1.
+rates_internalise(rates_internalise(:,:)>1,:)=1;
 
 % Check how many stages in the cell-particle interactions model there are
 % and whether or not the user has defined different rates for different
