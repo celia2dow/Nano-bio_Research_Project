@@ -21,6 +21,9 @@ if PARAMETERS.EWT_move == inf
 else
     subtitle('With motility events')
 end
+
+% Save figure
 fig8.Position = [100,100,1300,700];
 saveas(fig8, [PARAMETERS.folder_path '/PCC_and_confluence'], 'eps')
 saveas(fig8, [PARAMETERS.folder_path '/PCC_and_confluence'], 'png')
+figure(fig8)
