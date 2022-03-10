@@ -150,10 +150,31 @@ tsteps = 0:PARAMETERS.tstep_duration:tmax_noCC;
     interactPrtcls_start_of_tUP(1:end-1),PARAMETERS,est_lambda1UP.using_diffs);
 
 % CALCULATE ACTUAL RATES
-[l1,l2] = input_EWT_from_fraction(...
-    PARAMETERS.EWTs_internalise.values(1),...
-    PARAMETERS.EWTs_internalise.values(2),...
-    PARAMETERS.EWTs_internalise.values(3));
+if PARAMETERS.EWTs_internalise.input_type == "EWT"
+    % A list of L rates of particles transitioning between stages of the cell-
+    % particle interaction model unaffected by carrying capacity (e.g. free to 
+    % stage 1, stage 1 to stage 2, ..., stage L-1 to stage L or internalised).
+    % Can be 1 rate per transition or can be 1 rate per cell phase per
+    % transition - columns inicate interaction stage and rows indicate cell
+    % phase.
+    l1 = 1./PARAMETERS.EWTs_internalise.values(1);
+    l2 = 1./PARAMETERS.EWTs_internalise.values(2);
+elseif PARAMETERS.EWTs_internalise.input_type == "fraction"
+    % Calculate the rates from the desired observed fraction
+    % associated/internalised at confluence without carrying capacity.
+    [l1,l2] = input_EWT_from_fraction(...
+        PARAMETERS.EWTs_internalise.values(1),...
+        PARAMETERS.EWTs_internalise.values(2),...
+        PARAMETERS.EWTs_internalise.values(3));
+elseif PARAMETERS.EWTs_internalise.input_type == "prob_and_rates"
+    % If the input are just the rates (per hour) from one stage to the
+    % next, with the first value being the probability of binding once hit
+    % (and therefore not needing scaling by the timestep duration)
+    l1 = rate_diffus * PARAMETERS.EWTs_internalise.values(1) / ...
+        PARAMETERS.tstep_duration;
+    l2 = PARAMETERS.EWTs_internalise.values(2);
+end
+
 
 % PRINT RATES
 fprintf("\nLAMBDA 1: \nACTUAL %5.4e",l1)
