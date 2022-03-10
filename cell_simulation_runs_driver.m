@@ -2,7 +2,7 @@
 % simulation with the specified parameters for a given number of iterations 
 % and produces summary statistics from the numerous runs.
 %
-%   This is the work of Celia Dowling 28/02/22
+%   This is the work of Celia Dowling 10/03/22
 %
 %   The input argument for cells_simulation.m is a structure PARAMETERS 
 %   which has the following fields that need to be defined by the user:
@@ -13,7 +13,9 @@
 %                                   EWT_move.
 %       initial_num_cells           Initial number of cells in the lattice.
 %       prtcls_per_cell             Number of particles added to the cell
-%                                   monolayer per cell
+%                                   monolayer per lattice site and thus the
+%                                   total number of particles available to
+%                                   each cell regardless of confluence
 %       cell_diam (micrometers)     Average diameter of particlular cell-type. 
 %       culture_dim (cell diameters) Lattice dimensions are culture_dim by culture_dim.
 %       culture_media_height (mm)   The height of the cell culture media
@@ -36,14 +38,15 @@
 %                                   for 1 particle to transition out of 
 %                                   each stage in the cell-particle 
 %                                   interaction model. input_type will be 
-%                                   either "fraction" or "EWT"
+%                                   either "fraction", "EWT", or
+%                                   "prob_and_rates"
 %       EWTs_internalise.values     if input_type == "fraction":
 %                                       [fraction associated, fraction
 %                                       internalised, number of hours of 
 %                                       incubation after which these
 %                                       fractions are desired to be
 %                                       observed] ... at confluence without
-%                                       carrying capacity
+%                                       carrying capacity. 
 %                                   if input_type == "EWT":
 %                                       e.g. [free or stage 0 (hit), stage 
 %                                       1 (bound), ..., stage L-1] (hours) 
@@ -60,6 +63,18 @@
 %                                       stage and rows indicating cell 
 %                                       phase. Elements must be greater 
 %                                       than or equal to tstep_duration. 
+%                                   if input_type == "prob_and_rates":
+%                                       [probability of transitioning from
+%                                       stage 0 (hit) to stage 1 (bound) 
+%                                       (i.e. probability of binding once
+%                                       hit), rate from stage 1 to stage 2
+%                                       (per hour), rate from stage 2 to 
+%                                       stage 3 (per hour), ..., rate from
+%                                       stage L-1 to stage L (internalised,
+%                                       per hour)] ... this will result in
+%                                       a rate from free to stage 1 of
+%                                       EWTs_internalise.values(1) *
+%                                       rate_diffus (per timestep)
 %                                   For a petri dish saturated with cells:
 %                                   Given a certain percentage association 
 %                                   over 24 hours (a), choose values(1) 
@@ -143,11 +158,20 @@ close all;
 %rng(22)
 
 % Choose number of runs
-num_runs = 1000;
+num_runs = 1;
 
 % Choose a tolerance for gradient matching
 tol = 1E-1;
 tol_l2 = 5E-4;
+
+% Parameters relating to the fluorescent intensity dot plot
+stain1_part = 1000; % Without intensity transformations = 1
+stain1_std_dev = 10; % Without intensity transformations = 0
+stain1_background = 100; % Without intensity transformations = 0
+stain2_part = 2000; % Without intensity transformations = 1
+stain2_std_dev = 10; % Without intensity transformations = 0
+stain2_background = 100; % Without intensity transformations = 0
+alpha = 0.9; % Without intensity transformations = 1
 
 PARAMETERS = struct( ...
     'simulation_duration',24, ... (hours)
@@ -159,8 +183,8 @@ PARAMETERS = struct( ...
     'culture_media_height', 5,... (millimeters)
     'EWT_move', 1/6, ... (hours) 
     'EWTs_proliferate', [4,4,4], ... [4,4,4], ... [phase 1, ..., phase K](hours) 
-    'EWTs_internalise', struct('input_type', "fraction", ... "fraction" or "EWT"
-    'values', [0.01,0.006,24]), ... see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
+    'EWTs_internalise', struct('input_type', "fraction", ... "fraction" or "EWT" or "prob_and_rates"
+    'values', [0.9,0.8,24]),...%[0.01,0.006,24]), ... see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
     'max_prtcls', [inf,inf], ... [stage 1, ..., stage L]
     'prob_inherit', 0.7, ...     
     'temp', 36, ... (degrees celsius)    
@@ -187,7 +211,27 @@ PARAMETERS.folder_path = [pwd '/' date '/' folder_name];
 if ~exist(PARAMETERS.folder_path, 'dir')
     mkdir(PARAMETERS.folder_path)
 end
-                
+
+% Check if the input parameters for internalisation are inappropriate
+[it_is,rate_diffus] = is_l1_greater_than_rate_diffus(PARAMETERS);
+if it_is
+    % Change the input parameters
+    if PARAMETERS.EWTs_internalise.input_type == "EWT"
+        PARAMETERS.EWTs_internalise.values(:,1) = PARAMETERS.tstep_duration/rate_diffus;
+    elseif PARAMETERS.EWTs_internalise.input_type == "fraction"
+        PARAMETERS.EWTs_internalise.input_type = "prob_and_rates";
+        [~,l2] = input_EWT_from_fraction(...
+            PARAMETERS.EWTs_internalise.values(1),...
+            PARAMETERS.EWTs_internalise.values(2),...
+            PARAMETERS.EWTs_internalise.values(3));
+        PARAMETERS.EWTs_internalise.values(1) = 1;
+        PARAMETERS.EWTs_internalise.values(2) = l2;
+    elseif PARAMETERS.EWTs_internalise.input_type == "prob_and_rates"
+        PARAMETERS.EWTs_internalise.values(1) = 1;
+    end
+    fprintf("The input probability has been replaced with 1\n")
+end
+
 % Run multiple simulations and collect data
 total_tsteps = floor(PARAMETERS.simulation_duration/PARAMETERS.tstep_duration);
 total.cell_c_o_p = zeros(num_runs*PARAMETERS.culture_dim^2,total_tsteps+1,3);
@@ -259,6 +303,8 @@ st_dev2 = squeeze(sqrt(variances(2,:,:))); % standard deviations between runs
 upper2 = means + st_dev2;
 lower2 = means - st_dev2;
 
+%%
+clf
 
 % Plot the dosage distribution (the frequency of having so many particles
 % bound/internalised) after every X hours
@@ -280,16 +326,7 @@ if L==3 && ~any(PARAMETERS.max_prtcls(1:end-1)~=inf)
     % distributions from heuristic estimates
     parameter_plots_with_bounds_script
     % Print figures
-    figure(fig27)
-    figure(fig28)
-    figure(fig29)
-    figure(fig30)
 end
-
-% Print figures
-figure(fig2)
-figure(fig8)
-
 
 % Save the workspace
 save([PARAMETERS.folder_path '/variables_' num2str(PARAMETERS.prtcls_per_cell) ...
