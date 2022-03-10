@@ -2,7 +2,7 @@
 % simulation with the specified parameters for a given number of iterations 
 % and produces summary statistics from the numerous runs.
 %
-%   This is the work of Celia Dowling 10/03/22
+%   This is the work of Celia Dowling 11/03/22
 %
 %   The input argument for cells_simulation.m is a structure PARAMETERS 
 %   which has the following fields that need to be defined by the user:
@@ -184,7 +184,7 @@ PARAMETERS = struct( ...
     'EWT_move', 1/6, ... (hours) 
     'EWTs_proliferate', [4,4,4], ... [4,4,4], ... [phase 1, ..., phase K](hours) 
     'EWTs_internalise', struct('input_type', "fraction", ... "fraction" or "EWT" or "prob_and_rates"
-    'values', [0.5,0.006,24]),...%[0.01,0.006,24]), ... see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
+    'values', [0.5,0.01,24]),...%[0.01,0.006,24]), ... see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
     'max_prtcls', [inf,inf], ... [stage 1, ..., stage L]
     'prob_inherit', 0.7, ...     
     'temp', 36, ... (degrees celsius)    
@@ -216,19 +216,34 @@ end
 [it_is,rate_diffus] = is_l1_greater_than_rate_diffus(PARAMETERS);
 if it_is
     % Change the input parameters
+    fprintf("The input probability has been replaced with 1\n")
     if PARAMETERS.EWTs_internalise.input_type == "EWT"
-        PARAMETERS.EWTs_internalise.values(:,1) = PARAMETERS.tstep_duration/rate_diffus;
+        % Cap the EWT of free to bound at the rate of hitting
+        PARAMETERS.EWTs_internalise.values(:,1) = 1/rate_diffus; % hours
     elseif PARAMETERS.EWTs_internalise.input_type == "fraction"
         PARAMETERS.EWTs_internalise.input_type = "prob_and_rates";
-        [~,l2] = input_EWT_from_fraction(...
-            PARAMETERS.EWTs_internalise.values(1),...
-            PARAMETERS.EWTs_internalise.values(2),...
-            PARAMETERS.EWTs_internalise.values(3));
+        l1 = rate_diffus; % per hour
+        guess = 3*l1;
+        frac_internalised = PARAMETERS.EWTs_internalise.values(2);
+        num_hours = PARAMETERS.EWTs_internalise.values(3);
+        % Create a function from the CDF of the hypoexponential distribution, G(t),
+        % given that G(num_hours)=frac_internalised and lambda1 is as calculated.
+        fun = @(l2) 1 - frac_internalised - 1/(l2-l1) * ...
+            (l2 * exp(-l1 * num_hours) - l1 * exp(-l2 * num_hours));
+        % Estimate lambda2 by finding the root of this function (away from lambda1)
+        l2 = fzero(fun,guess); % per hour
+        if l2 > 1/PARAMETERS.tstep_duration || isnan(l2)
+            % Just in case the desired fraciton of internalisaiton is
+            % impossible with the reduced lambda1, then cap lambda2 at the
+            % reciprocal of the timestep duration
+            l2 = 1/PARAMETERS.tstep_duration;
+            fprintf('Other EWTs have been reduced to the timestep duration\n')
+        end
         PARAMETERS.EWTs_internalise.values = [1,l2];
     elseif PARAMETERS.EWTs_internalise.input_type == "prob_and_rates"
+        % Cap the probability of binding once hit to 1
         PARAMETERS.EWTs_internalise.values(1) = 1;
     end
-    fprintf("The input probability has been replaced with 1\n")
 end
 
 % Run multiple simulations and collect data
