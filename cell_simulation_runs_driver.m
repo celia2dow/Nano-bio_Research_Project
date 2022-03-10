@@ -158,7 +158,7 @@ close all;
 %rng(22)
 
 % Choose number of runs
-num_runs = 1;
+num_runs = 10;
 
 % Choose a tolerance for gradient matching
 tol = 1E-1;
@@ -184,7 +184,7 @@ PARAMETERS = struct( ...
     'EWT_move', 1/6, ... (hours) 
     'EWTs_proliferate', [4,4,4], ... [4,4,4], ... [phase 1, ..., phase K](hours) 
     'EWTs_internalise', struct('input_type', "fraction", ... "fraction" or "EWT" or "prob_and_rates"
-    'values', [0.9,0.8,24]),...%[0.01,0.006,24]), ... see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
+    'values', [0.5,0.006,24]),...%[0.01,0.006,24]), ... see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
     'max_prtcls', [inf,inf], ... [stage 1, ..., stage L]
     'prob_inherit', 0.7, ...     
     'temp', 36, ... (degrees celsius)    
@@ -224,8 +224,7 @@ if it_is
             PARAMETERS.EWTs_internalise.values(1),...
             PARAMETERS.EWTs_internalise.values(2),...
             PARAMETERS.EWTs_internalise.values(3));
-        PARAMETERS.EWTs_internalise.values(1) = 1;
-        PARAMETERS.EWTs_internalise.values(2) = l2;
+        PARAMETERS.EWTs_internalise.values = [1,l2];
     elseif PARAMETERS.EWTs_internalise.input_type == "prob_and_rates"
         PARAMETERS.EWTs_internalise.values(1) = 1;
     end
@@ -251,7 +250,7 @@ for run = 1:num_runs
         sum(EVOLUTION_INFO.cell_c_o_p(:,:,3),1)./EVOLUTION_INFO.cell_population]'; % Internalised
     runs.cell_pair_cor_coef(run,:) = EVOLUTION_INFO.cell_pair_cor_coef;
 end
-fprintf('The average final population of cells in a run:')
+fprintf('\nThe average final population of cells in a run:')
 disp(total.cell_population(end)/num_runs)
 
 % Find the average pair correlation coefficient
@@ -303,8 +302,8 @@ st_dev2 = squeeze(sqrt(variances(2,:,:))); % standard deviations between runs
 upper2 = means + st_dev2;
 lower2 = means - st_dev2;
 
-%%
-clf
+
+close all
 
 % Plot the dosage distribution (the frequency of having so many particles
 % bound/internalised) after every X hours
