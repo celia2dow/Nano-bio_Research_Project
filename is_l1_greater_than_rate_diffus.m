@@ -1,4 +1,4 @@
-function [check,l2] = is_l1_greater_than_rate_diffus(PARAMETERS)
+function [check,rate_diffus] = is_l1_greater_than_rate_diffus(PARAMETERS)
 % IS_L1_GREATER_THAN_RATE_DIFFUS checks if the input parameters for 
 % internalisation are appropriate. I.e. it checks that they don't require
 % that the probability of binding once hit be greater than 1. It returns
