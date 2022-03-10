@@ -1,9 +1,5 @@
 % SCRIPT for creating plots of parameter estimates and their lower and
 % upper bounds
-clf(figure(27))
-clf(figure(28))
-clf(figure(29))
-clf(figure(30))
 
 % Lambda 1 values
 fig27 = figure(27);
