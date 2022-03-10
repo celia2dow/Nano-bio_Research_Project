@@ -20,10 +20,6 @@ plot(binrng(1:end-1), est_lambda1LO.using_diffs, 'r:')
 hold off
 title('\lambda_1 calculated via MLE (black) and via differences (red)')
 
-fig27.Position = [100,100,1300,700];
-saveas(fig27, [PARAMETERS.folder_path '/lambda1_eror'], 'eps')
-saveas(fig27, [PARAMETERS.folder_path '/lambda1_eror'], 'png')
-
 % Lambda 2 values
 fig28 = figure(28);
 set(fig28, 'Visible', 'off');
@@ -43,10 +39,6 @@ plot(binrng,est_lambda2LO.distrib, 'g:')
 ylim([min(est_lambda2LO.distrib), max(est_lambda2UP.distrib)])
 hold off
 title('\lambda_2 calculated via differences (red), distribution (green) and mix (blue)')
-
-fig28.Position = [100,100,1300,700];
-saveas(fig28, [PARAMETERS.folder_path '/lambda2_eror'], 'eps')
-saveas(fig28, [PARAMETERS.folder_path '/lambda2_eror'], 'png')
 
 % CCvalues
 fig29 = figure(29);
@@ -68,10 +60,6 @@ if any(PARAMETERS.max_prtcls ~= inf)
     ylim([0 2*PARAMETERS.max_prtcls(end)])
     hold off
     title('CC calculated via differences (red), dynamic differences (magenta) and dynamic mix (cyan)')
-
-    fig29.Position = [100,100,1300,700];
-    saveas(fig29, [PARAMETERS.folder_path '/CC_eror'], 'eps')
-    saveas(fig29, [PARAMETERS.folder_path '/CC_eror'], 'png')
 end
 
 % Comparing data to estimate rates:
@@ -155,7 +143,25 @@ title(tit_str);
 subtitle(sub_str);
 xlabel('time $t$ hours', 'Interpreter', 'latex');
 
+% Save figures
+fig27.Position = [100,100,1300,700];
+saveas(fig27, [PARAMETERS.folder_path '/lambda1_eror'], 'eps')
+saveas(fig27, [PARAMETERS.folder_path '/lambda1_eror'], 'png')
+
+fig28.Position = [100,100,1300,700];
+saveas(fig28, [PARAMETERS.folder_path '/lambda2_eror'], 'eps')
+saveas(fig28, [PARAMETERS.folder_path '/lambda2_eror'], 'png')
+
+fig29.Position = [100,100,1300,700];
+saveas(fig29, [PARAMETERS.folder_path '/CC_eror'], 'eps')
+saveas(fig29, [PARAMETERS.folder_path '/CC_eror'], 'png')
+
 fig30.Position = [100,100,1300,700];
 pbaspect([1 1 1])
 saveas(fig30, [PARAMETERS.folder_path '/Analytical_distribs'], 'eps')
 saveas(fig30, [PARAMETERS.folder_path '/Analytical_distribs'], 'png')
+
+figure(fig27)
+figure(fig28)
+figure(fig29)
+figure(fig30)
