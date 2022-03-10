@@ -170,8 +170,7 @@ elseif PARAMETERS.EWTs_internalise.input_type == "prob_and_rates"
     % If the input are just the rates (per hour) from one stage to the
     % next, with the first value being the probability of binding once hit
     % (and therefore not needing scaling by the timestep duration)
-    l1 = rate_diffus * PARAMETERS.EWTs_internalise.values(1) / ...
-        PARAMETERS.tstep_duration;
+    l1 = rate_diffus * PARAMETERS.EWTs_internalise.values(1);
     l2 = PARAMETERS.EWTs_internalise.values(2);
 end
 
