@@ -21,6 +21,7 @@ if PARAMETERS.EWT_move == inf
 else
     subtitle('With motility events')
 end
+pbaspect([1 1 1]);
 
 % Save figure
 fig8.Position = [100,100,1300,700];
