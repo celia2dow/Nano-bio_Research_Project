@@ -62,8 +62,8 @@ if any(PARAMETERS.max_prtcls ~= inf)
     pbaspect([1 1 1])
 
     fig29.Position = [100,100,1300,700];
-    saveas(fig29, [PARAMETERS.folder_path '/CC_eror'], 'eps')
-    saveas(fig29, [PARAMETERS.folder_path '/CC_eror'], 'png')
+    saveas(fig29, [PARAMETERS.folder_path '/CC_error'], 'eps')
+    saveas(fig29, [PARAMETERS.folder_path '/CC_error'], 'png')
 
     figure(fig29)
 end
@@ -152,12 +152,12 @@ pbaspect([1 1 1])
 
 % Save figures
 fig27.Position = [100,100,1300,700];
-saveas(fig27, [PARAMETERS.folder_path '/lambda1_eror'], 'eps')
-saveas(fig27, [PARAMETERS.folder_path '/lambda1_eror'], 'png')
+saveas(fig27, [PARAMETERS.folder_path '/lambda1_error'], 'eps')
+saveas(fig27, [PARAMETERS.folder_path '/lambda1_error'], 'png')
 
 fig28.Position = [100,100,1300,700];
-saveas(fig28, [PARAMETERS.folder_path '/lambda2_eror'], 'eps')
-saveas(fig28, [PARAMETERS.folder_path '/lambda2_eror'], 'png')
+saveas(fig28, [PARAMETERS.folder_path '/lambda2_error'], 'eps')
+saveas(fig28, [PARAMETERS.folder_path '/lambda2_error'], 'png')
 
 fig30.Position = [100,100,1300,700];
 saveas(fig30, [PARAMETERS.folder_path '/Analytical_distribs'], 'eps')
