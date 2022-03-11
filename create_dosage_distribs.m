@@ -1,5 +1,5 @@
 function create_dosage_distribs(X, total_tsteps, PARAMETERS, total)
-% CREATE_DOSAGE_DISTRIBS crreates dosage distributions after every X hours.
+% CREATE_DOSAGE_DISTRIBS creates dosage distributions after every X hours.
 
 % Find limits for the x and y-axis: the largest values to be plotted, given
 % that plots are being plotted every hour
