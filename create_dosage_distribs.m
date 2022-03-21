@@ -10,15 +10,19 @@ dim2 = ceil(length(Xhour_indices)/dim1);
 
 % Find limits for the x and y-axis: the largest values to be plotted, given
 % that plots are being plotted every hour
-hourly_total.cell_c_o_p = total.cell_c_o_p(:,Xhour_indices,:);
-interact_max = max(hourly_total.cell_c_o_p(:,:,2),[],'all');
-internal_max = max(hourly_total.cell_c_o_p(:,:,3),[],'all');
+Xhourly_total.cell_c_o_p = total.cell_c_o_p(:,Xhour_indices,:);
+interact_max = max(Xhourly_total.cell_c_o_p(:,:,2),[],'all');
+internal_max = max(Xhourly_total.cell_c_o_p(:,:,3),[],'all');
+associat_max = max(sum(Xhourly_total.cell_c_o_p(:,:,2:3),3),[],'all');
+interact_min = min(Xhourly_total.cell_c_o_p(:,:,2),[],'all');
+internal_min = min(Xhourly_total.cell_c_o_p(:,:,3),[],'all');
+associat_min = min(sum(Xhourly_total.cell_c_o_p(:,:,2:3),3),[],'all');
 x_max = max(interact_max,internal_max);
 local_max = zeros(1,length(Xhour_indices));
 
 for index = 2:length(Xhour_indices)
-    [cells_interact,~] = histcounts(hourly_total.cell_c_o_p(:,index,2));
-    [cells_internal,~] = histcounts(hourly_total.cell_c_o_p(:,index,3));
+    [cells_interact,~] = histcounts(Xhourly_total.cell_c_o_p(:,index,2));
+    [cells_internal,~] = histcounts(Xhourly_total.cell_c_o_p(:,index,3));
     if ~isempty(cells_interact) && ~isempty(cells_internal)
         local_max(index) = max([cells_interact(2:end), cells_internal(2:end)]);
     elseif ~isempty(cells_interact)
@@ -30,11 +34,14 @@ end
 y_max = max([local_max,PARAMETERS.initial_num_cells]);
 
 % Find the limits of each stain fluorescence 
-S1_max = FLUORESC.stain1_part * ((interact_max + internal_max) + ...
-    FLUORESC.alpha*(interact_max + internal_max)) + FLUORESC.stain1_background;
-S2_max = FLUORESC.stain2_part * (interact_max) + ...
-    FLUORESC.stain2_background;
-disp([S1_max, S2_max])
+S1_min = FLUORESC.stain1_part * (FLUORESC.alpha*associat_min) + FLUORESC.stain1_background ...
+    - sqrt(associat_min) .* FLUORESC.stain1_std_dev;
+S1_max = FLUORESC.stain1_part * (associat_max) + FLUORESC.stain1_background ...
+    + sqrt(associat_max) .* FLUORESC.stain1_std_dev;
+S2_min = FLUORESC.stain2_part * (interact_min) + FLUORESC.stain2_background ...
+    - sqrt(interact_min) .* FLUORESC.stain2_std_dev;
+S2_max = FLUORESC.stain2_part * (interact_max) + FLUORESC.stain2_background ...
+    + sqrt(interact_max) .* FLUORESC.stain2_std_dev;
 
 fig2 = figure(2);
 set(fig2, 'Visible', 'off');
@@ -44,18 +51,18 @@ fig9 = figure(9);
 set(fig9, 'Visible', 'off');
 
 for time_plot = 1:length(Xhour_indices)
-    tstep = (time_plot-1)/PARAMETERS.tstep_duration; % equivalent timestep index
-    N_tstep = total.cell_population(tstep+1); % total number of cells across runs
+    Xth_hour_index = Xhour_indices(time_plot); % equivalent timestep index
+    N_tstep = total.cell_population(Xth_hour_index); % total number of cells across runs
     
     % FREQUENCY HISTOGRAMS
     set(0,'CurrentFigure',fig2)
     subplot(dim1,dim2,time_plot);
     % FREQUENCY OF CELLS WITH NUMS OF PARTICLES INTERACTING OVER TIME
-    histogram(hourly_total.cell_c_o_p(1:N_tstep,time_plot,2),...
+    histogram(Xhourly_total.cell_c_o_p(1:N_tstep,time_plot,2),...
         'FaceColor', [0,0,1], 'FaceAlpha', 0.2);
     hold on;
     % FREQUENCY OF CELLS WITH NUMS OF PARTICLES INTERNALISED OVER TIME
-    histogram(hourly_total.cell_c_o_p(1:N_tstep,time_plot,3),...
+    histogram(Xhourly_total.cell_c_o_p(1:N_tstep,time_plot,3),...
         'FaceColor', [1,0,0], 'FaceAlpha', 0.2);
     hold off;
     xlim([0,x_max]);
@@ -73,8 +80,8 @@ for time_plot = 1:length(Xhour_indices)
     subplot(dim1,dim2,time_plot);
     % PLOT EXTERNAL (STAIN 2) FLUORESCENCE AGAINST ASSOCIATED (STAIN 1)
     % FLUORESCENCE
-    n_interact = total.cell_c_o_p(1:N_tstep,time_plot,2);
-    n_internal = total.cell_c_o_p(1:N_tstep,time_plot,3);
+    n_interact = Xhourly_total.cell_c_o_p(1:N_tstep,time_plot,2);
+    n_internal = Xhourly_total.cell_c_o_p(1:N_tstep,time_plot,3);
     mean1 = FLUORESC.stain1_part .* (n_interact + FLUORESC.alpha.*n_internal) + FLUORESC.stain1_background; % true signal from stain 1 (x-axis)
     mean2 = FLUORESC.stain2_part .* n_interact + FLUORESC.stain2_background; % true signal from stain 2 (y-axis)
     S1 = sqrt(mean1) .* FLUORESC.stain1_std_dev .* randn(N_tstep,1) + mean1; % received signal from stain 1
@@ -86,8 +93,8 @@ for time_plot = 1:length(Xhour_indices)
     dot_size = 3*ones(length(S1),1);
     scatter(S1, S2, dot_size, c, 'filled');
     set(gca, 'YScale', 'log','Xscale', 'log','XMinorTick','on','YMinorTick','on');
-    xlim([1,S1_max]);
-    ylim([1,S2_max]);
+    xlim([S1_min,S1_max]);
+    ylim([S2_min,S2_max]);
     title(['At ' num2str(time_plot*X) ' hour/s']);
     xlabel('Stain 1 (associated)');
     ylabel('Stain 2 (external)');
