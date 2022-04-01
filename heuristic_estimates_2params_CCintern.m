@@ -13,19 +13,19 @@ fprintf("\nHeuristic estimates for lambda from free to stage 1 and from stage 1 
 % The mean number of free particles available to a cell at the beginning of
 % each timestep is the number that haven't been associated on the previous
 % timestep divided amongst the lattice sites. 
-freePrtcls_start_of_t = (PARAMETERS.prtcls_per_cell * PARAMETERS.culture_dim^2 .* ...
+freePrtcls_start_of_t = (PARAMETERS.prtcls_per_site * PARAMETERS.culture_dim^2 .* ...
     ones(1,length(binrng)) - (means(3,:) .* total.cell_population) ./ num_runs) ./ ...
     (PARAMETERS.culture_dim^2);
 % Free particles left over when association is the mean data minus 1
 % standard deviation (std. dev.) - i.e. lower bound association and thus
 % upper bound free particles
-freePrtcls_start_of_tUP = (PARAMETERS.prtcls_per_cell * PARAMETERS.culture_dim^2 .* ...
+freePrtcls_start_of_tUP = (PARAMETERS.prtcls_per_site * PARAMETERS.culture_dim^2 .* ...
     ones(1,length(binrng)) - (lower1(3,:) .* total.cell_population) ./ num_runs) ./ ...
     (PARAMETERS.culture_dim^2);
 % Free particles left over when association is the mean data plus 1
 % standard deviation (std. dev.) - i.e. upper bound association and thus
 % lower bound free particles.
-freePrtcls_start_of_tLO = (PARAMETERS.prtcls_per_cell * PARAMETERS.culture_dim^2 .* ...
+freePrtcls_start_of_tLO = (PARAMETERS.prtcls_per_site * PARAMETERS.culture_dim^2 .* ...
     ones(1,length(binrng)) - (upper1(3,:) .* total.cell_population) ./ num_runs) ./ ...
     (PARAMETERS.culture_dim^2);
 % No interaction occur prior to 0 hours, so the entry for '0 hours' 
@@ -49,105 +49,181 @@ interactPrtcls_start_of_tUP = upper1(3,:)-lower1(2,:); % full array
 % Interacting particles corresponding to lower bound association and upper
 % bound internalisation - i.e. lower bound interacting particles
 interactPrtcls_start_of_tLO = lower1(3,:)-upper1(2,:); % full array
+if L == 1 % Treat the numbers interactng as those that are free
+    interactPrtcls_start_of_t = freePrtcls_start_of_t;
+    interactPrtcls_start_of_tUP = freePrtcls_start_of_tUP;
+    interactPrtcls_start_of_tLO = freePrtcls_start_of_tLO;
+end
 
 % ESTIMATE LAMBDA 1
-%   via DIFFERENCES method
+%   via MLE method
 % Estimate lambda_1, the parameter for the exponential distribution that
 % describes the inter-association times of particles per cell, by
 % calculating the mean fraction of association events that occur (the
 % number that do occur in a timestep over the number that could occur -
 % i.e., the number of free particles) over the duration of time passed.
-est_lambda1.using_diffs = (means(3,2:end)- means(3,1:(end-1)))./... new in tstep 1, 2, ...
-    (binrng(2).*freePrtcls_start_of_t); % free at the beginning of tstep 1, 2, ...
-est_lambda1.using_diffs_mean = w8mean(est_lambda1.using_diffs,means(3,2:end));
+% Scale by the ratio of the current total cell population to the previous
+% total cell population to account for how it was the previous total that
+% had all of the recorded interactions, but it is the current total that
+% the means are presently calculated with.
+est_lambda1.MLE = (means(3,2:end)- means(3,1:(end-1))) .* total.cell_population(2:end)./... new in tstep 1, 2, ...
+    (binrng(2).*freePrtcls_start_of_t .* total.cell_population(1:end-1)); % free at the beginning of tstep 1, 2, ...
+% See if there is a carrying capacity
+tmax_noCC = tmax_from_hypoexpCDF(PARAMETERS,est_lambda1.MLE,tol,binrng);
+if total.cell_population(end) ~= total.cell_population(1)
+    weighting = total.cell_population(1)./total.cell_population;
+    weighting = weighting(2:end);
+else
+    weighting = means(3,2:end);
+end
+if tmax_noCC<PARAMETERS.simulation_duration
+    weighting = weighting(1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1));
+    est_lambda1.MLE_mean = w8mean(est_lambda1.MLE(1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1)),weighting);
+else
+    est_lambda1.MLE_mean = w8mean(est_lambda1.MLE,weighting);
+end
+
 % Upper bound
-est_lambda1UP.using_diffs = (upper1(3,2:end)- upper1(3,1:(end-1)))./... 
-    (binrng(2).*freePrtcls_start_of_tLO); 
-est_lambda1UP.using_diffs_mean = w8mean(est_lambda1UP.using_diffs,upper1(3,2:end));
+est_lambda1UP.MLE = (upper1(3,2:end)- upper1(3,1:(end-1))) .* total.cell_population(2:end)./... 
+    (binrng(2).*freePrtcls_start_of_tLO .* total.cell_population(1:end-1)); 
+if total.cell_population(end) ~= total.cell_population(1)
+    weighting = total.cell_population(1)./total.cell_population;
+    weighting = weighting(2:end);
+else
+    weighting = upper1(3,2:end);
+end
+if tmax_noCC<PARAMETERS.simulation_duration
+    weighting = weighting(1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1));
+    est_lambda1UP.MLE_mean = w8mean(est_lambda1UP.MLE(1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1)),weighting);
+else
+    est_lambda1UP.MLE_mean = w8mean(est_lambda1UP.MLE,weighting);
+end
+
 % Lower bound
-est_lambda1LO.using_diffs = (lower1(3,2:end)- lower1(3,1:(end-1)))./... 
-    (binrng(2).*freePrtcls_start_of_tUP); 
-est_lambda1LO.using_diffs_mean = w8mean(est_lambda1LO.using_diffs,lower1(3,2:end));
+est_lambda1LO.MLE = (lower1(3,2:end)- lower1(3,1:(end-1))) .* total.cell_population(2:end)./... 
+    (binrng(2).*freePrtcls_start_of_tUP .* total.cell_population(1:end-1)); 
+if total.cell_population(end) ~= total.cell_population(1)
+    weighting = total.cell_population(1)./total.cell_population;
+    weighting = weighting(2:end);
+else
+    weighting = lower1(3,2:end);
+end
+if tmax_noCC<PARAMETERS.simulation_duration
+    weighting = weighting(1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1));
+    est_lambda1LO.MLE_mean = w8mean(est_lambda1LO.MLE(1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1)),weighting);
+else
+    est_lambda1LO.MLE_mean = w8mean(est_lambda1LO.MLE,weighting);
+end
 
 % ESTIMATE LAMBDA 1
-%   via MLE method
-smth_assoc = smooth(means(3,:))'; % number associated at end of tstep 0, 1, 2, ...
-est_lambda1.MLE = smth_assoc(2:end)./ ... % num assoc at end of tstep 1, 2, ...
-    (binrng(2:end).*PARAMETERS.prtcls_per_cell);% time at end of tstep 1, 2, ...
-est_lambda1.MLE_mean = w8mean(est_lambda1.MLE,means(3,2:end));
-% Upper bound
-smth_assocUP = smooth(upper1(3,:))'; 
-est_lambda1UP.MLE = smth_assocUP(2:end)./ ... 
-    (binrng(2:end).*PARAMETERS.prtcls_per_cell);
-est_lambda1UP.MLE_mean = w8mean(est_lambda1UP.MLE,upper1(3,2:end));
-% Lower bound
-smth_assocLO = smooth(lower1(3,:))'; 
-est_lambda1LO.MLE = smth_assocLO(2:end)./ ...
-    (binrng(2:end).*PARAMETERS.prtcls_per_cell); 
-est_lambda1LO.MLE_mean = w8mean(est_lambda1LO.MLE,lower1(3,2:end));
+%   via MLE POISSON method
+% Equate the Poisson MLE for the number associated/internalised etc to the
+% CDF for the exponential distribution with parameter lambda_1 and solve.
+if total.cell_population(1)==total.cell_population(end)
+    % Need to divide the Poisson MLE by the confluence and multiply 
+    % lambda_1 by the confluence
+    prtcls_obs.MLE_Poisson = est_lambda1.MLE * binrng(2)/total.confluence(1);
+    est_lambda1.MLE_Poisson = log(1-prtcls_obs.MLE_Poisson)./...
+        (-binrng(2).*total.confluence(1).*PARAMETERS.culture_dim.^2);
+    est_lambda1.MLE_Poisson_mean = mean(est_lambda1.MLE_Poisson(...
+        1:min([int64(tmax_noCC/PARAMETERS.tstep_duration + 1),...
+        length(est_lambda1.MLE_Poisson)])));
+    est_lambda1.mean = est_lambda1.MLE_Poisson_mean;
+    % Upper bound
+    prtcls_obsUP.MLE_Poisson = est_lambda1UP.MLE * binrng(2)/total.confluence(1);
+    est_lambda1UP.MLE_Poisson = log(1-prtcls_obsUP.MLE_Poisson)./...
+        (-binrng(2).*total.confluence(1).*PARAMETERS.culture_dim.^2);
+    est_lambda1UP.MLE_Poisson_mean = mean(est_lambda1UP.MLE_Poisson(...
+        1:min([int64(tmax_noCC/PARAMETERS.tstep_duration + 1),...
+        length(est_lambda1.MLE_Poisson)])));
+    est_lambda1UP.mean = est_lambda1UP.MLE_Poisson_mean;
+    % Lower bound
+    prtcls_obsLO.MLE_Poisson = est_lambda1LO.MLE * binrng(2)/total.confluence(1);
+    est_lambda1LO.MLE_Poisson = log(1-prtcls_obsLO.MLE_Poisson)./...
+        (-binrng(2).*total.confluence(1).*PARAMETERS.culture_dim.^2);
+    est_lambda1LO.MLE_Poisson_mean = mean(est_lambda1LO.MLE_Poisson(...
+        1:min([int64(tmax_noCC/PARAMETERS.tstep_duration + 1),...
+        length(est_lambda1.MLE_Poisson)])));
+    est_lambda1LO.mean = est_lambda1LO.MLE_Poisson_mean;
+else
+    est_lambda1.mean = est_lambda1.MLE_mean;
+    est_lambda1UP.mean = est_lambda1UP.MLE_mean;
+    est_lambda1LO.mean = est_lambda1LO.MLE_mean;
+end
 
 % CDF of hypoexponential distribution
 CDF.hypoexp = @(l1, l2, t) 1 - 1./(l2-l1) .* (l2 .* exp(-l1 .* t) - l1 .* exp(-l2 .* t));
-CDF.hypoexp_MLEl1 = @(l2,t) CDF.hypoexp(est_lambda1.MLE_mean,l2,t); 
-CDF.hypoexp_MLEl1UP = @(l2,t) CDF.hypoexp(est_lambda1UP.MLE_mean,l2,t); % Upper bound
-CDF.hypoexp_MLEl1LO = @(l2,t) CDF.hypoexp(est_lambda1LO.MLE_mean,l2,t); % Lower bound
-CDF.hypoexp_MLEl1_tstep = @(l2) CDF.hypoexp_MLEl1(l2,PARAMETERS.tstep_duration); 
-CDF.hypoexp_MLEl1UP_tstep = @(l2) CDF.hypoexp_MLEl1UP(l2,PARAMETERS.tstep_duration); % Upper bound
-CDF.hypoexp_MLEl1LO_tstep = @(l2) CDF.hypoexp_MLEl1LO(l2,PARAMETERS.tstep_duration); % Lower bound
+CDF.hypoexp_l1 = @(l2,t) CDF.hypoexp(est_lambda1.mean,l2,t); 
+CDF.hypoexp_l1UP = @(l2,t) CDF.hypoexp(est_lambda1UP.mean,l2,t); % Upper bound
+CDF.hypoexp_l1LO = @(l2,t) CDF.hypoexp(est_lambda1LO.mean,l2,t); % Lower bound
+CDF.hypoexp_l1_tstep = @(l2) CDF.hypoexp_l1(l2,PARAMETERS.tstep_duration); 
+CDF.hypoexp_l1UP_tstep = @(l2) CDF.hypoexp_l1UP(l2,PARAMETERS.tstep_duration); % Upper bound
+CDF.hypoexp_l1LO_tstep = @(l2) CDF.hypoexp_l1LO(l2,PARAMETERS.tstep_duration); % Lower bound
 % CDF of exponential distribution
 CDF.exp = @(l, t) 1 - exp(- l .*t);
 CDF.exp_tstep = @(l) CDF.exp(l,PARAMETERS.tstep_duration);
 % Two guesses to feed into fzero in case one gives lambda2=lambda1
-guess = [est_lambda1.MLE_mean/3 est_lambda1.MLE_mean*3]; % mean
-guessUP = [est_lambda1UP.MLE_mean/3 est_lambda1UP.MLE_mean*3]; % Upper bound
-guessLO = [est_lambda1LO.MLE_mean/3 est_lambda1LO.MLE_mean*3]; % Lower bound
+guess = [est_lambda1.mean*3]; % mean
+guessUP = [est_lambda1UP.mean*3]; % Upper bound
+guessLO = [est_lambda1LO.mean*3]; % Lower bound
 
-% ESTIMATE TIME AT WHICH CC KICKS IN (TMAX_NOCC) and LAMBDA 2
-%   via DISTRIBUTION method
-[tmax_noCC,est_lambda2.distrib_mean,est_lambda2.distrib] = ... 
-    tmax_l2_from_hypoexpCDF(binrng,CDF.hypoexp_MLEl1,means,...
-    PARAMETERS,guess,est_lambda1.MLE_mean,tol_l2);
-% Upper bound lambda2 (assuming lower bound lambda1)
-[~,est_lambda2UP.distrib_mean,est_lambda2UP.distrib] = ... 
-    tmax_l2_from_hypoexpCDF(binrng,CDF.hypoexp_MLEl1LO,upper1,...
-    PARAMETERS,guessLO,est_lambda1LO.MLE_mean,tol_l2);
-% Lower bound lambda2 (assuming upper bound lambda1)
-[~,est_lambda2LO.distrib_mean,est_lambda2LO.distrib] = ... 
-    tmax_l2_from_hypoexpCDF(binrng,CDF.hypoexp_MLEl1UP,lower1,...
-    PARAMETERS,guessUP,est_lambda1UP.MLE_mean,tol_l2);
-
-% ESTIMATE LAMBDA 2
-%   via MIX method
-[est_lambda2.mix_mean,est_lambda2.mix] = l2_from_mixMethod(...
-    binrng,CDF.hypoexp_MLEl1_tstep,CDF.exp_tstep,...
-    means,freePrtcls_start_of_t,interactPrtcls_start_of_t,...
-    PARAMETERS,guess,est_lambda1.MLE_mean,tmax_noCC);
-% Upper bound lambda2 (assuming lower bound lambda1)
-[est_lambda2UP.mix_mean,est_lambda2UP.mix] = l2_from_mixMethod(...
-    binrng,CDF.hypoexp_MLEl1LO_tstep,CDF.exp_tstep,...
-    upper1,freePrtcls_start_of_tUP,interactPrtcls_start_of_tLO(1:end-1),...
-    PARAMETERS,guessLO,est_lambda1LO.MLE_mean,tmax_noCC);
-% Lower bound lambda2 (assuming upper bound lambda1)
-[est_lambda2LO.mix_mean,est_lambda2LO.mix] = l2_from_mixMethod(...
-    binrng,CDF.hypoexp_MLEl1UP_tstep,CDF.exp_tstep,...
-    lower1,freePrtcls_start_of_tLO,interactPrtcls_start_of_tUP(1:end-1),...
-    PARAMETERS,guessUP,est_lambda1UP.MLE_mean,tmax_noCC);
-
-tsteps = 0:PARAMETERS.tstep_duration:tmax_noCC; 
-
-% ESTIMATE LAMBDA 2
-%   via DIFFERENCES method
-[est_lambda2.using_diffs_mean,est_lambda2.using_diffs] = ...
-    l2_from_diffsMethod(tsteps,means,freePrtcls_start_of_t, ...
-    interactPrtcls_start_of_t,PARAMETERS,est_lambda1.using_diffs_mean);
-% Upper bound lambda2 (assuming lower bound lambda1)
-[est_lambda2UP.using_diffs_mean,est_lambda2UP.using_diffs] = ...
-    l2_from_diffsMethod(tsteps,interactPrtcls_start_of_tLO,freePrtcls_start_of_tUP, ...
-    interactPrtcls_start_of_tLO(1:end-1),PARAMETERS,est_lambda1LO.using_diffs);
-% Lower bound lambda2 (assuming upper bound lambda1)
-[est_lambda2LO.using_diffs_mean,est_lambda2LO.using_diffs] = ...
-    l2_from_diffsMethod(tsteps,interactPrtcls_start_of_tUP,freePrtcls_start_of_tLO, ...
-    interactPrtcls_start_of_tUP(1:end-1),PARAMETERS,est_lambda1UP.using_diffs);
+if L==2
+    % ESTIMATE TIME AT WHICH CC KICKS IN (TMAX_NOCC) and LAMBDA 2
+    %   via DISTRIBUTION method
+    [tmax_noCC,est_lambda2.distrib_mean,est_lambda2.distrib] = ... 
+        tmax_l2_from_hypoexpCDF(binrng,CDF.hypoexp_l1,means,...
+        PARAMETERS,guess,est_lambda1.mean,tol);
+    % Upper bound lambda2 (assuming lower bound lambda1)
+    [~,est_lambda2UP.distrib_mean,est_lambda2UP.distrib] = ... 
+        tmax_l2_from_hypoexpCDF(binrng,CDF.hypoexp_l1LO,upper1,...
+        PARAMETERS,guessLO,est_lambda1LO.mean,tol);
+    % Lower bound lambda2 (assuming upper bound lambda1)
+    [~,est_lambda2LO.distrib_mean,est_lambda2LO.distrib] = ... 
+        tmax_l2_from_hypoexpCDF(binrng,CDF.hypoexp_l1UP,lower1,...
+        PARAMETERS,guessUP,est_lambda1UP.mean,tol);
+    
+    % ESTIMATE LAMBDA 2
+    %   via MIX method
+    [est_lambda2.mix_mean,est_lambda2.mix] = l2_from_mixMethod(...
+        binrng,CDF.hypoexp_l1_tstep,CDF.exp_tstep,...
+        means,freePrtcls_start_of_t,interactPrtcls_start_of_t,...
+        PARAMETERS,guess,est_lambda1.mean,tmax_noCC);
+    % Upper bound lambda2 (assuming lower bound lambda1)
+    [est_lambda2UP.mix_mean,est_lambda2UP.mix] = l2_from_mixMethod(...
+        binrng,CDF.hypoexp_l1LO_tstep,CDF.exp_tstep,...
+        upper1,freePrtcls_start_of_tUP,interactPrtcls_start_of_tLO(1:end-1),...
+        PARAMETERS,guessLO,est_lambda1LO.mean,tmax_noCC);
+    % Lower bound lambda2 (assuming upper bound lambda1)
+    [est_lambda2LO.mix_mean,est_lambda2LO.mix] = l2_from_mixMethod(...
+        binrng,CDF.hypoexp_l1UP_tstep,CDF.exp_tstep,...
+        lower1,freePrtcls_start_of_tLO,interactPrtcls_start_of_tUP(1:end-1),...
+        PARAMETERS,guessUP,est_lambda1UP.mean,tmax_noCC);
+    
+    tsteps = 0:PARAMETERS.tstep_duration:tmax_noCC; 
+    
+    % ESTIMATE LAMBDA 2
+    %   via DIFFERENCES method
+    [est_lambda2.using_diffs_mean,est_lambda2.using_diffs] = ...
+        l2_from_diffsMethod(tsteps,means,freePrtcls_start_of_t, ...
+        interactPrtcls_start_of_t,PARAMETERS,est_lambda1.mean);
+    % Upper bound lambda2 (assuming lower bound lambda1)
+    [est_lambda2UP.using_diffs_mean,est_lambda2UP.using_diffs] = ...
+        l2_from_diffsMethod(tsteps,interactPrtcls_start_of_tLO,freePrtcls_start_of_tUP, ...
+        interactPrtcls_start_of_tLO(1:end-1),PARAMETERS,est_lambda1LO.mean);
+    % Lower bound lambda2 (assuming upper bound lambda1)
+    [est_lambda2LO.using_diffs_mean,est_lambda2LO.using_diffs] = ...
+        l2_from_diffsMethod(tsteps,interactPrtcls_start_of_tUP,freePrtcls_start_of_tLO, ...
+        interactPrtcls_start_of_tUP(1:end-1),PARAMETERS,est_lambda1UP.mean);
+else
+    % ESTIMATE LAMBDA L
+    % (i.e., the rate from the final stage of association to being 
+    % completely internalised)
+%     for j = 1:length(binrng)
+%         t = binrng(j);
+%         lambdas = input_EWT_from_fraction(,j);
+%     end
+    fprintf('\nERROR: Not capable of approximating for lambda_L yet. \n')
+end
 
 % CALCULATE ACTUAL RATES
 if PARAMETERS.EWTs_internalise.input_type == "EWT"
@@ -157,51 +233,59 @@ if PARAMETERS.EWTs_internalise.input_type == "EWT"
     % Can be 1 rate per transition or can be 1 rate per cell phase per
     % transition - columns inicate interaction stage and rows indicate cell
     % phase.
-    l1 = 1./PARAMETERS.EWTs_internalise.values(1);
-    l2 = 1./PARAMETERS.EWTs_internalise.values(2);
+    lambdas = 1./PARAMETERS.EWTs_internalise.values(:);
 elseif PARAMETERS.EWTs_internalise.input_type == "fraction"
     % Calculate the rates from the desired observed fraction
     % associated/internalised at confluence without carrying capacity.
-    [l1,l2] = input_EWT_from_fraction(...
-        PARAMETERS.EWTs_internalise.values(1),...
-        PARAMETERS.EWTs_internalise.values(2),...
-        PARAMETERS.EWTs_internalise.values(3));
+    lambdas = input_EWT_from_fraction(...
+        PARAMETERS.EWTs_internalise.values(1:end-1),...
+        PARAMETERS.EWTs_internalise.values(end));
 elseif PARAMETERS.EWTs_internalise.input_type == "prob_and_rates"
     % If the input are just the rates (per hour) from one stage to the
     % next, with the first value being the probability of binding once hit
     % (and therefore not needing scaling by the timestep duration)
-    l1 = rate_diffus * PARAMETERS.EWTs_internalise.values(1);
-    l2 = PARAMETERS.EWTs_internalise.values(2);
+    lambdas = PARAMETERS.EWTs_internalise.values(:);
+    lambdas(1) = rate_diffus * lambdas(1);
 end
 
-
+    
 % PRINT RATES
-fprintf("\nLAMBDA 1: \nACTUAL %5.4e",l1)
+fprintf("\nLAMBDA 1: \nACTUAL %5.4e",lambdas(1))
 fprintf('\nMETHOD \t\tMEAN \t\tLOWER ESTIMATE \tUPPER ESTIMATE')
-fprintf('\nDifferences \t%5.4e \t%5.4e \t%5.4e',...
-    est_lambda1.using_diffs_mean, est_lambda1LO.using_diffs_mean, ...
-    est_lambda1UP.using_diffs_mean);
 fprintf('\nMLE \t\t%5.4e \t%5.4e \t%5.4e \n',...
     est_lambda1.MLE_mean, est_lambda1LO.MLE_mean, ...
     est_lambda1UP.MLE_mean);
+if total.cell_population(1)==total.cell_population(end)
+    fprintf('MLE Poisson \t%5.4e \t%5.4e \t%5.4e \n',...
+    est_lambda1.MLE_Poisson_mean, est_lambda1LO.MLE_Poisson_mean, ...
+    est_lambda1UP.MLE_Poisson_mean);
+end
 
-fprintf("\nLAMBDA 2: \nACTUAL %5.4e",l2)
-fprintf('\nMETHOD \t\tMEAN \t\tLOWER ESTIMATE \tUPPER ESTIMATE')
-fprintf('\nDifferences \t%5.4e \t%5.4e \t%5.4e',...
-    est_lambda2.using_diffs_mean, est_lambda2LO.using_diffs_mean, ...
-    est_lambda2UP.using_diffs_mean);
-fprintf('\nDistribution \t%5.4e \t%5.4e \t%5.4e',...
-    est_lambda2.distrib_mean, est_lambda2LO.distrib_mean, ...
-    est_lambda2UP.distrib_mean);
-fprintf('\nMix \t\t%5.4e \t%5.4e \t%5.4e\n',...
-    est_lambda2.mix_mean, est_lambda2LO.mix_mean, ...
-    est_lambda2UP.mix_mean);
+if L==2
+    fprintf("\nLAMBDA 2: \nACTUAL %5.4e",lambdas(end))                                                                              
+    fprintf('\nMETHOD \t\tMEAN \t\tLOWER ESTIMATE \tUPPER ESTIMATE')
+    fprintf('\nDifferences \t%5.4e \t%5.4e \t%5.4e',...
+        est_lambda2.using_diffs_mean, est_lambda2LO.using_diffs_mean, ...
+        est_lambda2UP.using_diffs_mean);
+    fprintf('\nDistribution \t%5.4e \t%5.4e \t%5.4e',...
+        est_lambda2.distrib_mean, est_lambda2LO.distrib_mean, ...
+        est_lambda2UP.distrib_mean);
+    fprintf('\nMix \t\t%5.4e \t%5.4e \t%5.4e\n',...
+        est_lambda2.mix_mean, est_lambda2LO.mix_mean, ...
+        est_lambda2UP.mix_mean);
+else
+    for i = 2:L
+        fprintf("\nLAMBDA %d: \nACTUAL %5.4e",i,lambdas(end))                                                                              
+        fprintf('\nMETHOD \t\tMEAN \t\tLOWER ESTIMATE \tUPPER ESTIMATE')
+    end
+end
 
 % ESTIMATE CARRYING CAPACITY (CC) **if there is one**
 %   via DIFFERENCES method
 %   via DYNAMIC RATE calculated from DIFFERENCES METHOD
 %   via DYNAMIC RATE calculated from MIX METHOD
-if any(PARAMETERS.max_prtcls ~= inf) 
+%   via MLE METHOD (for case with 1 internalisation rate)
+if any(PARAMETERS.max_prtcls ~= inf) && L<=2
     % The number of internalised particles per cell at the start of a 
     % timestep is the number of internalised particles per cell at the end
     % of the previous timestep.
@@ -212,38 +296,70 @@ if any(PARAMETERS.max_prtcls ~= inf)
     % Prepare input for CC_GIVEN_FRACTION
     using_diffs = gradient(means(2,2:end),PARAMETERS.tstep_duration) ./ ... 
         (interactPrtcls_start_of_t .* est_lambda2.using_diffs_mean);
-    dynamic_diffs= [0 est_lambda2.using_diffs]./est_lambda2.using_diffs_mean;
-    dynamic_mix= est_lambda2.mix./est_lambda2.mix_mean;
-    frction = [using_diffs; dynamic_diffs; dynamic_mix];
-    methods = {'using_diffs','dynamic_diffs','dynamic_mix'};
-
+    if L == 1
+        if total.cell_population(1)==total.cell_population(end)
+            meth = est_lambda1.MLE_Poisson./est_lambda1.mean;
+        else
+            meth = est_lambda1.MLE./est_lambda1.mean;
+        end
+        frction = [meth];
+        methods = {'using_mean'};
+    else
+        dynamic_diffs= [0 est_lambda2.using_diffs]./est_lambda2.using_diffs_mean;
+        dynamic_mix= est_lambda2.mix./est_lambda2.mix_mean;
+        frction = [using_diffs; dynamic_diffs; dynamic_mix];
+        methods = {'using_diffs','dynamic_diffs','dynamic_mix'};
+    end
     est_CC = CC_given_fraction(methods,internalPrtcls_start_of_t,frction, PARAMETERS);
 
     % For the upper bound
-    using_diffsUP = gradient(upper1(2,2:end),PARAMETERS.tstep_duration) ./ ... 
-        (interactPrtcls_start_of_tLO(2:end) .* est_lambda2UP.using_diffs_mean);
-    dynamic_diffsUP= [0 est_lambda2UP.using_diffs]./est_lambda2UP.using_diffs_mean;
-    dynamic_mixUP= est_lambda2UP.mix./est_lambda2UP.mix_mean;
-    frctionUP = [using_diffs; dynamic_diffs; dynamic_mix];
+    if L == 1
+        if total.cell_population(1)==total.cell_population(end)
+            methUP = est_lambda1UP.MLE_Poisson./est_lambda1UP.mean;
+        else
+            methUP = est_lambda1UP.MLE./est_lambda1UP.mean;
+        end
+        frctionUP = [methUP];
+    else
+        using_diffsUP = gradient(upper1(2,2:end),PARAMETERS.tstep_duration) ./ ... 
+            (interactPrtcls_start_of_tLO(2:end) .* est_lambda2UP.using_diffs_mean);
+        dynamic_diffsUP= [0 est_lambda2UP.using_diffs]./est_lambda2UP.using_diffs_mean;
+        dynamic_mixUP= est_lambda2UP.mix./est_lambda2UP.mix_mean;
+        frctionUP = [using_diffsUP; dynamic_diffsUP; dynamic_mixUP];
+    end
     est_CCUP = CC_given_fraction(methods,internalPrtcls_start_of_tUP,frctionUP, PARAMETERS);
 
     % For the lower bound
-    using_diffsLO = gradient(lower1(2,2:end),PARAMETERS.tstep_duration) ./ ... 
-        (interactPrtcls_start_of_tUP(2:end) .* est_lambda2LO.using_diffs_mean);
-    dynamic_diffsLO= [0 est_lambda2UP.using_diffs]./est_lambda2UP.using_diffs_mean;
-    dynamic_mixLO= est_lambda2UP.mix./est_lambda2UP.mix_mean;
-    frctionLO = [using_diffs; dynamic_diffs; dynamic_mix];
+    if L == 1
+        if total.cell_population(1)==total.cell_population(end)
+            methLO = est_lambda1LO.MLE_Poisson./est_lambda1LO.mean;
+        else
+            methLO = est_lambda1LO.MLE./est_lambda1LO.mean;
+        end
+        frctionLO = [methLO];
+    else
+        using_diffsLO = gradient(lower1(2,2:end),PARAMETERS.tstep_duration) ./ ... 
+            (interactPrtcls_start_of_tUP(2:end) .* est_lambda2LO.using_diffs_mean);
+        dynamic_diffsLO= [0 est_lambda2UP.using_diffs]./est_lambda2UP.using_diffs_mean;
+        dynamic_mixLO= est_lambda2UP.mix./est_lambda2UP.mix_mean;
+        frctionLO = [using_diffsLO; dynamic_diffsLO; dynamic_mixLO];
+    end
     est_CCLO = CC_given_fraction(methods,internalPrtcls_start_of_tLO,frctionLO, PARAMETERS);
-    
+
     % PRINT CARRYING CAPACITIES
     fprintf("\n\nHeuristic estimates for carrying capacity (CC): \n(units are particles)\n")
     
     fprintf("\nCARRYING CAPACITY: \nACTUAL %5.3f",PARAMETERS.max_prtcls(end))
     fprintf('\nMETHOD \t\t\t\tMEAN \tLOWER ESTIMATE \tUPPER ESTIMATE')
-    fprintf('\nDifferences \t\t\t%5.3f \t%5.3f \t\t%5.3f',...
-        est_CC.using_diffs_mean, est_CCLO.using_diffs_mean, est_CCUP.using_diffs_mean);
-    fprintf('\nDynamic using differences \t%5.3f \t%5.3f \t\t%5.3f',...
-        est_CC.dynamic_diffs_mean, est_CCLO.dynamic_diffs_mean, est_CCUP.dynamic_diffs_mean);
-    fprintf('\nDynamic using mix \t\t%5.3f \t%5.3f \t\t%5.3f\n',...
-        est_CC.dynamic_mix_mean, est_CCLO.dynamic_mix_mean, est_CCUP.dynamic_mix_mean);
+    if L == 1
+        fprintf('\nMLE method \t\t\t%5.3f \t%5.3f \t\t%5.3f\n',...
+            est_CC.using_MLE_Poisson, est_CCLO.using_MLE_Poisson, est_CCUP.using_MLE_Poisson);
+    else
+        fprintf('\nDifferences \t\t\t%5.3f \t%5.3f \t\t%5.3f',...
+            est_CC.using_diffs_mean, est_CCLO.using_diffs_mean, est_CCUP.using_diffs_mean);
+        fprintf('\nDynamic using differences \t%5.3f \t%5.3f \t\t%5.3f',...
+            est_CC.dynamic_diffs_mean, est_CCLO.dynamic_diffs_mean, est_CCUP.dynamic_diffs_mean);
+        fprintf('\nDynamic using mix \t\t%5.3f \t%5.3f \t\t%5.3f\n',...
+            est_CC.dynamic_mix_mean, est_CCLO.dynamic_mix_mean, est_CCUP.dynamic_mix_mean);
+    end
 end
