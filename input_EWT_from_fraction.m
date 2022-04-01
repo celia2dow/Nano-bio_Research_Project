@@ -1,28 +1,27 @@
-function [lambda1,lambda2] = input_EWT_from_fraction(frac_associated,...
-    frac_internalised,num_hours)
-% INPUT_EWT_FROM_FRACTION calculates the rates that can be input into
-% cells_simulation.m given the desired fractional association
-% (frac_associated) and the desired fractional internalisation
-% (frac_internalised) after so many hours (num_hours). frac_associated
-% and frac_internalised are numbers between 0 and 1.
+function lambdas = input_EWT_from_fraction(fractions,num_hours)
+% INPUT_EWT_FROM_FRACTION calculates the L rates that can be input into
+% cells_simulation.m given the desired fractions of particles in each of 
+% the L stages included in the particle-cell interaction model after so
+% many hours. E.g. lambda(1) = rate of association, lambda(2) = rate of 
+% internalisation for a model with L=2 stages. The fracitons must be
+% numbers between 0 and 1. For L+1 inputs, there are L outputs.
+% 
+% E.g.      [l1, l2] = input_EWT_from_fraction(...
+%                           frac_associated,frac_internalised,num_hours);
 
-% Find lambda1 from the CDF of the exponential distribution, F(t), given
-% that F(num_hours)=frac_associated
-lambda1 = log(1-frac_associated)/(-num_hours); 
-
-% Don't want the root finding function to arrive at lambda1=lambda2
-if 1 >= frac_internalised/(frac_associated^2) % lambda1 >= lambda2
-    guess = lambda1/3;
-else % lambda1 < lambda2
-    guess = 3*lambda1;
+lambdas = zeros(1,length(fractions));
+guessLAM = 0.1; 
+for i = 1:length(fractions)
+    frac = fractions(i);
+    % Create the n-lambda hypoexponential CDF
+    fun_of = hypoexpCDF(i,lambdas,frac);
+    fun = @(lambda_i) fun_of(lambda_i,num_hours);
+    % Estimate lambda(i) by finding the root of this function (away from 0)
+    lambdas(i)=fzero(fun,guessLAM);
+end
 end
 
-% Create a function from the CDF of the hypoexponential distribution, G(t),
-% given that G(num_hours)=frac_internalised and lambda1 is as calculated.
-fun = @(lambda2) 1 - frac_internalised - 1/(lambda2-lambda1) * ...
-    (lambda2 * exp(-lambda1 * num_hours) - ...
-    lambda1 * exp(-lambda2 * num_hours));
-
-% Estimate lambda2 by finding the root of this function (away from lambda1)
-lambda2 = fzero(fun,guess);
+function item = item_j(vec,j)
+    % Picks out the jth element of a vector in a single line of code
+    item = vec(j);
 end
