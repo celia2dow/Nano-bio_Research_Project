@@ -2,7 +2,7 @@
 % simulation with the specified parameters for a given number of iterations 
 % and produces summary statistics from the numerous runs.
 %
-%   This is the work of Celia Dowling 11/03/22
+%   This is the work of Celia Dowling 01/04/22
 %
 %   The input argument for cells_simulation.m is a structure PARAMETERS 
 %   which has the following fields that need to be defined by the user:
@@ -12,7 +12,7 @@
 %                                   expected waiting time (EWT), usually 
 %                                   EWT_move.
 %       initial_num_cells           Initial number of cells in the lattice.
-%       prtcls_per_cell             Number of particles added to the cell
+%       prtcls_per_site             Number of particles added to the cell
 %                                   monolayer per lattice site and thus the
 %                                   total number of particles available to
 %                                   each cell regardless of confluence
@@ -210,21 +210,21 @@ close all;
 %rng(22)
 
 % Choose number of runs
-num_runs = 10;
+num_runs = 200;
 
 % Choose number of hours after which to plot
 X = 4;
 
 % Choose a tolerance for gradient matching
-tol_l2 = 5E-4;
+tol = 5E-4;
 
 % Parameters relating to the fluorescent intensity dot plot
 FLUORESC = struct( ...
     'stain1_part', 1000, ... Without intensity transformations = 1
-    'stain1_std_dev', 10, ... Without intensity transformations = 0
+    'stain1_std_dev', 0, ... Without intensity transformations = 0
     'stain1_background',100, ... Without intensity transformations = 0
     'stain2_part', 2000, ... Without intensity transformations = 1
-    'stain2_std_dev', 10, ... Without intensity transformations = 0
+    'stain2_std_dev', 0, ... Without intensity transformations = 0
     'stain2_background', 100, ... Without intensity transformations = 0
     'alpha', 0.9 ... Without intensity transformations = 1
     );
@@ -233,16 +233,16 @@ FLUORESC = struct( ...
 PARAMETERS = struct( ...
     'simulation_duration',24, ... (hours)
     'tstep_duration',1/6, ... (hours)
-    'initial_num_cells', 100, ... 
-    'prtcls_per_cell', 5000, ...
+    'initial_num_cells', 10, ... 
+    'prtcls_per_site', 1000, ...
     'cell_diam', 25, ... (micrometers)
     'culture_dim', 10, ... (cell diameters)
-    'culture_media_height', 5,... (millimeters)
+    'culture_media_height', 5,...  (millimeters) 0.5
     'EWT_move', 1/6, ... (hours) 
-    'EWTs_proliferate', [4,4,4], ... [4,4,4], ... [phase 1, ..., phase K](hours) 
+    'EWTs_proliferate', 1e10*[100], ... [4,4,4], ... [phase 1, ..., phase K](hours) 
     'EWTs_internalise', struct('input_type', "fraction", ... "fraction" or "EWT" or "prob_and_rates"
-    'values', [0.02,0.01,24]),...%[0.01,0.006,24]), ... see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
-    'max_prtcls', [inf,inf], ... [stage 1, ..., stage L]
+    'values',  [0.02,0.01,0.005,24]),... [0.02,0.01,24]), ...[0.01,0.006,24]),... [0.2,0.1,24]), ...% see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
+    'max_prtcls', [inf,inf,inf], ... [stage 1, ..., stage L]
     'prob_inherit', 0.7, ...     
     'temp', 36, ... (degrees celsius)    
     'viscos', 1.0005E-3,... (kiloggrams / (meter*second))      
@@ -258,7 +258,7 @@ folder_name = ['Number_Runs' num2str(num_runs) ...
     '_N0' num2str(PARAMETERS.initial_num_cells) ...
     '_dim' num2str(PARAMETERS.culture_dim) ...
     '_maxPrtcls' num2str(PARAMETERS.max_prtcls) ...
-    '_pPerC' num2str(PARAMETERS.prtcls_per_cell) ...
+    '_pPerC' num2str(PARAMETERS.prtcls_per_site) ...
     '_EWTintern' num2str(PARAMETERS.EWTs_internalise.values) ...
     '_' date_time];
 folder_name = folder_name(find(~isspace(folder_name)));
@@ -278,56 +278,57 @@ if it_is
         % Cap the EWT of free to bound at the rate of hitting
         PARAMETERS.EWTs_internalise.values(:,1) = 1/rate_diffus; % hours
     elseif PARAMETERS.EWTs_internalise.input_type == "fraction"
-        PARAMETERS.EWTs_internalise.input_type = "prob_and_rates";
-        l1 = rate_diffus; % per hour
-        guess = 3*l1;
-        frac_internalised = PARAMETERS.EWTs_internalise.values(2);
-        num_hours = PARAMETERS.EWTs_internalise.values(3);
-        % Create a function from the CDF of the hypoexponential distribution, G(t),
-        % given that G(num_hours)=frac_internalised and lambda1 is as calculated.
-        fun = @(l2) 1 - frac_internalised - 1/(l2-l1) * ...
-            (l2 * exp(-l1 * num_hours) - l1 * exp(-l2 * num_hours));
-        % Estimate lambda2 by finding the root of this function (away from lambda1)
-        l2 = fzero(fun,guess); % per hour
-        if l2 > 1/PARAMETERS.tstep_duration || isnan(l2)
-            % Just in case the desired fraciton of internalisaiton is
-            % impossible with the reduced lambda1, then cap lambda2 at the
-            % reciprocal of the timestep duration
-            l2 = 1/PARAMETERS.tstep_duration;
-            fprintf('Other EWTs have been reduced to the timestep duration\n')
-        end
-        PARAMETERS.EWTs_internalise.values = [1,l2];
+        PARAMETERS.EWTs_internalise.values(:,1) = rate_diffus;
     elseif PARAMETERS.EWTs_internalise.input_type == "prob_and_rates"
         % Cap the probability of binding once hit to 1
         PARAMETERS.EWTs_internalise.values(1) = 1;
     end
 end
 
+% Check how many stages are in the cell-particle interaciton model
+if PARAMETERS.EWTs_internalise.input_type == "EWT"
+    L = length(PARAMETERS.EWTs_internalise.values);
+elseif PARAMETERS.EWTs_internalise.input_type == "fraction"
+    L = length(PARAMETERS.EWTs_internalise.values) - 1;
+elseif PARAMETERS.EWTs_internalise.input_type == "prob_and_rates"
+    L = length(PARAMETERS.EWTs_internalise.values);
+end
+
 % Run multiple simulations and collect data
 total_tsteps = floor(PARAMETERS.simulation_duration/PARAMETERS.tstep_duration);
 total.cell_c_o_p = zeros(num_runs*PARAMETERS.culture_dim^2,total_tsteps+1,3);
+total.cell_lineage = zeros(num_runs*PARAMETERS.culture_dim^2,total_tsteps+4);
 total.cell_population = zeros(1,total_tsteps+1);
 runs.cell_pair_cor_coef = zeros(num_runs,total_tsteps+1);
 runs.average_cell_c_o_p = zeros(num_runs,total_tsteps+1,3);
+cell_end = 0;
 for run = 1:num_runs
     EVOLUTION_INFO = cells_simulation(PARAMETERS);
     total.cell_population = total.cell_population + EVOLUTION_INFO.cell_population;
     N_final = EVOLUTION_INFO.cell_population(end); % final number of cells
-    cell_start = (run - 1) * N_final + 1;
-    cell_end = run * N_final;
+    cell_start = cell_end + 1;
+    cell_end = cell_end + N_final;
     total.cell_c_o_p(cell_start:cell_end,:,:) = EVOLUTION_INFO.cell_c_o_p;
+    EVOLUTION_INFO.cell_lineage_history(:,1:2) = EVOLUTION_INFO.cell_lineage_history(:,1:2) + cell_start-1;
+    total.cell_lineage(cell_start:cell_end,:) = EVOLUTION_INFO.cell_lineage_history;
     runs.average_cell_c_o_p(run,:,:) = ... % Average number of particles per cell in a class...
         [sum(EVOLUTION_INFO.cell_c_o_p(:,:,1),1)./EVOLUTION_INFO.cell_population; ... % free or hit
         sum(EVOLUTION_INFO.cell_c_o_p(:,:,2),1)./EVOLUTION_INFO.cell_population; ... % Interacting
         sum(EVOLUTION_INFO.cell_c_o_p(:,:,3),1)./EVOLUTION_INFO.cell_population]'; % Internalised
     runs.cell_pair_cor_coef(run,:) = EVOLUTION_INFO.cell_pair_cor_coef;
 end
+%%
+total.cell_c_o_p = total.cell_c_o_p(1:cell_end,:,:);
+total.cell_lineage = total.cell_lineage(1:cell_end,:);
+total.confluence = total.cell_population/(PARAMETERS.culture_dim^2 * num_runs);
+binrng = 0:PARAMETERS.tstep_duration:PARAMETERS.simulation_duration; % Create bin ranges
+
 fprintf('\nThe average final population of cells in a run:')
 disp(total.cell_population(end)/num_runs)
 
 % Find the average pair correlation coefficient
 total.cell_pair_cor_coef = [mean(runs.cell_pair_cor_coef(:,:), 'all'),...
-        var(runs.cell_pair_cor_coef(:,:), 0, 'all')];
+    var(runs.cell_pair_cor_coef(:,:), 0, 'all')];
 fprintf("The mean and variance of the pair correlation coefficient in each run:")
 format SHORTE
 disp(total.cell_pair_cor_coef)
@@ -340,23 +341,36 @@ means(1,:) = sum(total.cell_c_o_p(:,:,2),1)./total.cell_population;
 means(2,:) = sum(total.cell_c_o_p(:,:,3),1)./total.cell_population;     
 % Average associated particles per cell over time
 means(3,:) = means(1,:) + means(2,:);   
-% Create bin ranges
-binrng = 0:PARAMETERS.tstep_duration:PARAMETERS.simulation_duration; 
+
 % Calculate variances for each timestep
 variances = zeros(2,3,total_tsteps+1);
-total.cell_associated = sum(total.cell_c_o_p(:,:,2:3),3);
+total.cell_c_o_p_corrected = zeros(cell_end,total_tsteps+1,2);
 for tstep = 0:total_tsteps
     N_tstep = total.cell_population(tstep+1); 
     
-    % BETWEEN ALL CELLS IN ALL RUNS
+    % Getting rid of the entries corresponding to cells that haven't been
+    % created yet, but maintaining the pairing of numbers of interacting/
+    % internalised particles for a cell.
+    n_interact = total.cell_c_o_p(:,tstep+1,2);
+    n_internal = total.cell_c_o_p(:,tstep+1,3);
+    with_associated_prtcls = any([n_interact n_internal],2);
+    n_interact = n_interact(with_associated_prtcls);
+    n_internal = n_internal(with_associated_prtcls);
+    num_with = length(n_interact);
+    n_interact = [zeros(N_tstep-num_with,1); n_interact];
+    n_internal = [zeros(N_tstep-num_with,1); n_internal];
+    total.cell_c_o_p_corrected(1:N_tstep,tstep+1,2) = n_interact;
+    total.cell_c_o_p_corrected(1:N_tstep,tstep+1,3) = n_internal;
+
+    % VARIANCES BETWEEN ALL CELLS IN ALL RUNS
     % Variances in interacting particles
-    variances(1,1,tstep+1) = var(total.cell_c_o_p(1:N_tstep,tstep+1,2)); 
+    variances(1,1,tstep+1) = var(n_interact); 
     % Variances in internalised particles
-    variances(1,2,tstep+1) = var(total.cell_c_o_p(1:N_tstep,tstep+1,3)); 
+    variances(1,2,tstep+1) = var(n_internal); 
     % Variances in associated particles
-    variances(1,3,tstep+1) = var(total.cell_associated(1:N_tstep,tstep+1));
+    variances(1,3,tstep+1) = var(n_interact + n_internal);
     
-    % BETWEEN RUN MEANS
+    % VARIANCES BETWEEN RUN MEANS
     % Variance in interacting particles
     variances(2,1,tstep+1) = var(runs.average_cell_c_o_p(:,tstep+1,2)); 
     % Variances in internalised particles
@@ -373,13 +387,13 @@ lower1 = means - st_dev1;
 st_dev2 = squeeze(sqrt(variances(2,:,:))); % standard deviations between runs
 upper2 = means + st_dev2;
 lower2 = means - st_dev2;
-%%
+
 
 close all
 
 % Plot the dosage distribution (the frequency of having so many particles
 % bound/internalised), secondary fluoerescence against primary
-% fluorescence, and dosages split by number of cell divisions after every X 
+% fluorescence, and deosages split by number of cell divisions after every X 
 % hours
 create_dosage_distribs(X, total_tsteps, PARAMETERS, total, FLUORESC)
 
@@ -387,14 +401,12 @@ create_dosage_distribs(X, total_tsteps, PARAMETERS, total, FLUORESC)
 % each timestep across all of the run PCCs and the variance in the mean)
 PCC_against_confluence
 
-[~,~,L]=size(total.cell_c_o_p);
-
-% In the 2 parameter case with or without a carrying capacity on the last 
-% transition (internalisation).
-if L==3 && ~any(PARAMETERS.max_prtcls(1:end-1)~=inf)
+% When there is no carrying capacity on transitions in between any stages
+% other than the last transition (internalisation).
+if ~any(PARAMETERS.max_prtcls(1:end-1)~=inf)
     % Heuristic estimation of lambda1, lambda2 and CC if relevant
-    heuristic_estimates_2params_CCintern
-    % Plot the mean associated/internalised/interacting particles over all
+    heuristic_estimates_CCintern
+    % Plot the mean ass  ociated/internalised/interacting particles over all
     % of the runs over time with standard deviation and analytical
     % distributions from heuristic estimates
     parameter_plots_with_bounds_script
@@ -402,7 +414,7 @@ if L==3 && ~any(PARAMETERS.max_prtcls(1:end-1)~=inf)
 end
 
 % Save the workspace
-save([PARAMETERS.folder_path '/variables_' num2str(PARAMETERS.prtcls_per_cell) ...
+save([PARAMETERS.folder_path '/variables_' num2str(PARAMETERS.prtcls_per_site) ...
     'pPerC_CC' num2str(PARAMETERS.max_prtcls(end)) ...
     '_' num2str(PARAMETERS.EWTs_internalise.values(1)) ...
     '_' num2str(PARAMETERS.EWTs_internalise.values(2)) ...
