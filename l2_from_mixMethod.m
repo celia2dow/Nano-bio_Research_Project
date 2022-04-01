@@ -31,7 +31,7 @@ for i = 1:length(l2_array)
         expCDF(l2) * interactPrtcls_start_of_t(i) - new_interns(i);
     % Estimate lambda2 by finding the root of this function (away from lambda1)
     % i.e., by substituting the data into the hypoexponential distribution
-    l2_array(i) = fzero(func,guess(2));
+    l2_array(i) = fzero(func,guess);
     if l2_array(i) == l1_mean
         l2_array(i) = fzero(func,guess(1));
     end
