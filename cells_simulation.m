@@ -3,7 +3,7 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 % in a 2.D cell monolayer within a culture dish as they interact with and
 % internalised particles.
 %
-%   This is the work of Celia Dowling 11/03/22
+%   This is the work of Celia Dowling 01/04/22
 %
 %   The input argument is a structure PARAMETERS containing the fields:
 %
@@ -12,7 +12,7 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 %                                   expected waiting time (EWT), usually 
 %                                   EWT_move.
 %       initial_num_cells           Initial number of cells in the lattice.
-%       prtcls_per_cell             Number of particles added to the cell
+%       prtcls_per_site             Number of particles added to the cell
 %                                   monolayer per lattice site and thus the
 %                                   total number of particles available to
 %                                   each cell regardless of confluence
@@ -186,11 +186,10 @@ if PARAMETERS.EWTs_internalise.input_type == "EWT"
 elseif PARAMETERS.EWTs_internalise.input_type == "fraction"
     % Calculate the rates from the desired observed fraction
     % associated/internalised at confluence without carrying capacity.
-    [l1,l2] = input_EWT_from_fraction( ...
-        PARAMETERS.EWTs_internalise.values(1), ...
-        PARAMETERS.EWTs_internalise.values(2), ...
-        PARAMETERS.EWTs_internalise.values(3));
-    rates_internalise = PARAMETERS.tstep_duration.*[l1,l2];
+    lambdas = input_EWT_from_fraction(...
+        PARAMETERS.EWTs_internalise.values(1:end-1),...
+        PARAMETERS.EWTs_internalise.values(end));
+    rates_internalise = PARAMETERS.tstep_duration.*lambdas;
     % Convert the first rate from the rate of binding per timestep to the
     % probability of binding once hit by dividing by the rate of hitting.
     rates_internalise(:,1) = rates_internalise(:,1)./rate_diffus;
@@ -205,8 +204,13 @@ elseif PARAMETERS.EWTs_internalise.input_type == "prob_and_rates"
 end
 
 % Check if any of the rates (i.e. probabilities) are greater than 1. If
-% they are, cap them at 1.
-rates_internalise(rates_internalise(:,:)>1,:)=1;
+% they are, cap them at 1 and send an error warning.
+if any(rates_internalise(:,:)>1)
+    rate_nums = rates_internalise(rates_internalise(:,:)>1,:);
+    fprintf("\nERROR: input EWTs_internalise.values " + num2str(rate_nums) ...
+        + " are too big. \nEither reduce them or increase the timestep size.\n")
+    rates_internalise(rates_internalise(:,:)>1,:)=1;
+end
 
 % Check how many stages in the cell-particle interactions model there are
 % and whether or not the user has defined different rates for different
@@ -221,7 +225,7 @@ end
 %%% INITIALISE VARIABLES, CONSTANTS & VISUAL %%%
 
 N_tstep = PARAMETERS.initial_num_cells; % the number of cells at timestep t
-prtcls_initial = PARAMETERS.culture_dim^2 * PARAMETERS.prtcls_per_cell; % the number of particles initially
+prtcls_initial = PARAMETERS.culture_dim^2 * PARAMETERS.prtcls_per_site; % the number of particles initially
 total_sites = PARAMETERS.culture_dim ^2; % total number of possible positions in petri dish
 % Number of timesteps of duration tstep_duration that fit into
 % simulation_duration number of hours.
@@ -264,7 +268,7 @@ cell_pair_cor_coef = [num_neighs_occ/normalising_coeff zeros(1,total_tsteps)];
 tally_prtcls = [prtcls_initial zeros(1, total_tsteps); zeros(2, total_tsteps + 1)];
 % Record class of particles on a cell basis per hour.
 cell_c_o_p = zeros(total_sites,total_tsteps+1,3);
-cell_c_o_p(1:N_tstep,1,1) = PARAMETERS.prtcls_per_cell;
+cell_c_o_p(1:N_tstep,1,1) = PARAMETERS.prtcls_per_site;
 % The number of times the binomial distribution overdraws particles to
 % internalise.
 count_catch = 0;
@@ -293,7 +297,7 @@ end
 
 % Loop stops when timesteps are up or when culture dish is full of cells
 % with their maximum capacity of particles.
-while tstep < total_tsteps && ~all(tally_prtcls(:,tstep+1) == [0; ...
+while tstep < total_tsteps && ~all(tally_prtcls([end-1,end],tstep+1) == [...
         prtcls_initial-min(total_sites*PARAMETERS.max_prtcls(L),prtcls_initial); ...
         min(total_sites*PARAMETERS.max_prtcls(L),prtcls_initial)],'all')
     tstep = tstep+1;
@@ -319,7 +323,7 @@ while tstep < total_tsteps && ~all(tally_prtcls(:,tstep+1) == [0; ...
         [~, indices] = intersect(cell_sites, prtcl_sites);
         cell_prtcls(indices,1) = cell_prtcls(indices,1) + 1;
     end
-    
+    %cell_prtcls(:,1) = PARAMETERS.prtcls_per_site;
     % We draw the number of free particles that hit a cell and attempt to
     % bind to it (i.e. that are available in stage 0 of the cell-particle
     % interaction model) from a Binomial distribution where the probability
@@ -373,10 +377,11 @@ while tstep < total_tsteps && ~all(tally_prtcls(:,tstep+1) == [0; ...
     cell_prtcls(1:N_tstep,2:L+1) = cell_prtcls(1:N_tstep,2:L+1) + successes_in_stage(1:N_tstep,:);
     
     % Update the total class of particles
-    tally_prtcls(2,tstep+1) = sum(cell_prtcls(1:N_tstep,2:L),'all'); % interacting
     tally_prtcls(3,tstep+1) = sum(cell_prtcls(1:N_tstep,L+1)); % internalised
+    if L~=1
+        tally_prtcls(2,tstep+1) = sum(cell_prtcls(1:N_tstep,2:L),'all'); % interacting
+    end
     tally_prtcls(1,tstep+1) = prtcls_initial - sum(tally_prtcls(2:3,tstep+1)); % free
-    
     
     %%% MOVEMENT %%%
     
@@ -438,32 +443,23 @@ while tstep < total_tsteps && ~all(tally_prtcls(:,tstep+1) == [0; ...
                     parent_cell_num = find(cell_sites == parent_site);
                     gen_num = cell_lineage_history(cell_lineage_history(:,2) == parent_cell_num, lineage_colmn) + 1;
                     cell_lineage_history(N_tstep,1:2) = [parent_cell_num, N_tstep];
-                    cell_lineage_history([parent_cell_num,N_tstep],lineage_colmn) = gen_num;                    
+                    cell_lineage_history(parent_cell_num,lineage_colmn) = gen_num;   
+                    cell_lineage_history(N_tstep,lineage_colmn) = 1; 
                     
                     % The inheritance of internalised/ interacting
                     % nanoparticles from a cell with n_int nanoparticles 
                     % per cell-particle interaction stage follows a 
                     % binomial distribution.
                     for stage = 2:L+1
+                        % Number of particles that the parent cell has in
+                        % this stage of the interaction model
                         n_int = cell_prtcls(parent_cell_num, stage);
+                        % Assuming that the previously existing "parent"
+                        % cell becomes daughter cell 1 and that the new
+                        % cell created in a nearest neighbour site is 
+                        % daughter cell 2
                         if n_int >= 1
-                            % Possible inheritance numbers
-                            x_pos = 0:n_int;
-                            % Define pdf for these possible numbers
-                            pmf = zeros(1,n_int + 1);
-                            for i = x_pos
-                                % Probability of daughter cell 1 inheriting
-                                % i nanoparticles from parent cell in stage
-                                pmf(i+1) = 0.5 * nchoosek(n_int,i) *...
-                                    (PARAMETERS.prob_inherit^i * ...
-                                    (1-PARAMETERS.prob_inherit)^(n_int-i) + ...
-                                    PARAMETERS.prob_inherit^(n_int-i) * ...
-                                    (1-PARAMETERS.prob_inherit)^i);
-                            end
-                            % Generate an inherited number of interacting/ 
-                            % internalised particles for daughter cell 1 and 
-                            % derive for daughter cell 2
-                            daught_1 = rand_pmf(x_pos, pmf, 1);
+                            daught_1 = binornd(n_int, PARAMETERS.prob_inherit, 1);
                             daught_2 = n_int - daught_1;
                         else
                             daught_1 = 0;
@@ -487,13 +483,9 @@ while tstep < total_tsteps && ~all(tally_prtcls(:,tstep+1) == [0; ...
         end
     end
     
-    % If a new block of 6 hours is begun, start recording cell_lineage in a
-    % new column
-    hours = tstep*PARAMETERS.tstep_duration;
-    if mod(hours,6)==0
-        cell_lineage_history(:,lineage_colmn+1)=cell_lineage_history(:,lineage_colmn);
-        lineage_colmn = lineage_colmn + 1;
-    end
+    % Start recording cell_lineage in a new column
+    cell_lineage_history(:,lineage_colmn+1)=cell_lineage_history(:,lineage_colmn);
+    lineage_colmn = lineage_colmn + 1;
     
     %%% RECORD %%%
     
@@ -511,10 +503,12 @@ while tstep < total_tsteps && ~all(tally_prtcls(:,tstep+1) == [0; ...
     end
     
     % Record the class of particles on a cell basis every timestep
-    cell_c_o_p(1:N_tstep,tstep+1,1) = ...
-        cell_prtcls(1:N_tstep,1); % Particles that are free OR hit
-    cell_c_o_p(1:N_tstep,tstep+1,2) = ...
-        sum(cell_prtcls(1:N_tstep,2:L),2); % Particles that interact
+    cell_c_o_p(1:N_tstep,tstep+1,1) = PARAMETERS.prtcls_per_site -...
+        sum(cell_prtcls(1:N_tstep,2:L+1),2); % Particles that are free OR hit
+    if L ~= 1
+        cell_c_o_p(1:N_tstep,tstep+1,2) = ...
+            sum(cell_prtcls(1:N_tstep,2:L),2); % Particles that interact
+    end
     cell_c_o_p(1:N_tstep,tstep+1,3) = ...
         cell_prtcls(1:N_tstep,L+1); % Particles that are internalised
     
