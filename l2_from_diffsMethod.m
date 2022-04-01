@@ -5,11 +5,11 @@ function [l2_mean, l2_array] = l2_from_diffsMethod(times,av_data,...
 % kicks in (times) is a constant. Assume also that the gradient of 
 % associated particles in a timestep will be equal to the number of free 
 % particles at the beginning of that timestep (freePrtcls_start_of_t) 
-% multiplied by the rate of transition lambda1 estimated via the method of 
-% differences (l1). Assume also that the gradient of internalised particles 
-% in a timestep will be equal to the number of interacting particles at the 
-% beginning of that timestep (interactPrtcls_start_of_t) multiplied by the 
-% dynamic lambda2.
+% multiplied by the rate of transition lambda1 estimated via the MLE (l1). 
+% Assume also that the gradient of internalised particles in a timestep 
+% will be equal to the number of interacting particles at the beginning of 
+% that timestep (interactPrtcls_start_of_t) multiplied by the dynamic 
+% lambda2.
 %
 % It returns an estimate per timestep as well as a weighted mean.
 %
