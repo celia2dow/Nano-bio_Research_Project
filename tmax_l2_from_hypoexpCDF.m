@@ -24,10 +24,10 @@ l2_array = zeros(1,length(times));
 smth_intern = smooth(av_data(2,:))';
 for i = 1:length(l2_array)
     % Hypoexponential CDF - fraction internalisation
-    func = @(l2) hypoCDF(l2,times(i)) - smth_intern(i)/PARAMETERS.prtcls_per_cell;
+    func = @(l2) hypoCDF(l2,times(i)) - smth_intern(i)/PARAMETERS.prtcls_per_site;
     % Estimate lambda2 by finding the root of this function (away from lambda1)
     % i.e., by substituting the data into the hypoexponential distribution
-    l2_array(i) = fzero(func,guess(2));
+    l2_array(i) = fzero(func,guess);
     if l2_array(i) == l1_mean
         l2_array(i) = fzero(func,guess(1));
     end
