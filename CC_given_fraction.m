@@ -8,6 +8,8 @@ function CC = CC_given_fraction(methods,internalPrtcls_start_of_t,frction, PARAM
 %       DYNAMIC RATE: frction = dynamic lambda 2/ estimated mean lambda 2
 %                   # either using calculations via the differences method
 %                   # or calculations via the mix method
+%       MEAN L1 METHOD: frction = dynamic lambda 1/ estimated mean lambda 1
+%                   # when there is only one rate of internalisation
 %
 % The CC calculated at each time is returned in addition to a mean estimate
 % for the CC calculated from all data beyond 12 hours.
