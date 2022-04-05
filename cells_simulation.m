@@ -254,10 +254,10 @@ successes_in_stage = zeros(total_sites, L);
 
 % Initialise arrays/constants for EVOLUTION_INFO fields.
 cell_population = [N_tstep zeros(1,total_tsteps)];
-cell_lineage_history = [zeros(N_tstep,1) (1:N_tstep)' ones(N_tstep,2) ...
-    zeros(N_tstep,ceil(PARAMETERS.simulation_duration*PARAMETERS.tstep_duration)-1); ...
-    zeros(total_sites,ceil(PARAMETERS.simulation_duration*PARAMETERS.tstep_duration)+3)];
-lineage_colmn = 4;
+cell_lineage_history = [zeros(N_tstep,1) (1:N_tstep)' ones(N_tstep,1) ...
+    zeros(N_tstep,ceil(PARAMETERS.simulation_duration/PARAMETERS.tstep_duration)); ...
+    zeros(total_sites,ceil(PARAMETERS.simulation_duration/PARAMETERS.tstep_duration)+3)];
+lineage_colmn = 3;
 cell_phase_history = [cell_phases' zeros(total_sites, total_tsteps)]; 
 num_neighs_occ = count_occupied_neighs(PARAMETERS.culture_dim, N_tstep, cell_sites, culture_dish);
 normalising_coeff = 4 * (PARAMETERS.culture_dim^2) * N_tstep * (N_tstep-1)/...
@@ -301,7 +301,6 @@ while tstep < total_tsteps && ~all(tally_prtcls([end-1,end],tstep+1) == [...
         prtcls_initial-min(total_sites*PARAMETERS.max_prtcls(L),prtcls_initial); ...
         min(total_sites*PARAMETERS.max_prtcls(L),prtcls_initial)],'all')
     tstep = tstep+1;
-    
     
     %%% CELL-PARTICLE INTERACTIONS %%%
     
@@ -409,6 +408,10 @@ while tstep < total_tsteps && ~all(tally_prtcls([end-1,end],tstep+1) == [...
     %%% CELL PROLIFERATION CYCLE %%%
     
     N_tstep_static = N_tstep; % keep N_tstep fixed for the attempted prolif. events
+
+    % Start recording cell_lineage in a new column
+    cell_lineage_history(:,lineage_colmn+1)=cell_lineage_history(:,lineage_colmn);
+    lineage_colmn = lineage_colmn + 1;
     
     % N_t_static cells are selected with replacement, at random, one at a 
     % time and are given a chance to transition to the next phase in the
@@ -482,10 +485,6 @@ while tstep < total_tsteps && ~all(tally_prtcls([end-1,end],tstep+1) == [...
             end
         end
     end
-    
-    % Start recording cell_lineage in a new column
-    cell_lineage_history(:,lineage_colmn+1)=cell_lineage_history(:,lineage_colmn);
-    lineage_colmn = lineage_colmn + 1;
     
     %%% RECORD %%%
     
