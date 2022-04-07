@@ -20,6 +20,9 @@ associat_min = min(sum(Xhourly_total.cell_c_o_p(:,:,2:3),3),[],'all');
 x_max = max(interact_max,internal_max);
 local_max = zeros(1,length(Xhour_indices));
 
+% Find the largest number of cell divisions to be included
+max_cell_divs = max(total.cell_lineage(:,3:end),[],'all');
+
 for index = 2:length(Xhour_indices)
     [cells_interact,~] = histcounts(Xhourly_total.cell_c_o_p(:,index,2));
     [cells_internal,~] = histcounts(Xhourly_total.cell_c_o_p(:,index,3));
@@ -59,7 +62,7 @@ for time_plot = 1:length(Xhour_indices)
     % FREQUENCY HISTOGRAMS
     set(0,'CurrentFigure',fig2)
     subplot(dim1,dim2,time_plot);
-    if any(Xhourly_total.cell_c_o_p(:,:,2))
+    if any(Xhourly_total.cell_c_o_p(:,:,2), 'all')
         % FREQUENCY OF CELLS WITH NUMS OF PARTICLES INTERACTING OVER TIME
         histogram(n_interact,'FaceColor', [0,0,1], 'FaceAlpha', 0.2, ...
             'DisplayName','Interacting');
@@ -96,7 +99,7 @@ for time_plot = 1:length(Xhour_indices)
     scatter(S1, S2, dot_size, c, 'filled');
     set(gca, 'YScale', 'log','Xscale', 'log','XMinorTick','on','YMinorTick','on');
     xlim([S1_min,S1_max]);
-    if any(Xhourly_total.cell_c_o_p(:,:,2))
+    if any(Xhourly_total.cell_c_o_p(:,:,2), 'all')
         ylim([S2_min,S2_max]);
     end
     title(['At ' num2str(time_plot*X) ' hour/s']);
@@ -107,36 +110,40 @@ for time_plot = 1:length(Xhour_indices)
 
     % FREQUENCY HISTOGRAMS PER NUM OF CELL DIVISIONS EVERY X HOURS
     set(0,'CurrentFigure',fig9)
-    cell_division_class = zeros(1,N_tstep);
-    if N_tstep>PARAMETERS.initial_num_cells*num_runs
-        division_history = total.cell_lineage_history(...
-            total.cell_lineage_history(:,Xth_hour_index+2);%PARAMETERS.initial_num_cells+1:N_tstep,1);
-        edges = (0.5:1:max(division_history)+0.5);
-        cell_division_class = cell_division_class(1:max(division_history)) + histcounts(division_history',edges);
-    end
-    rows = unique(cell_division_class);
-    
-    for row = rows % ITERATING THROUGH THE DIVISION NUMBERS PRESENT AT THIS TIMESTEP
-        plot_num = row*(floor(PARAMETERS.simulation_duration/6) + 1) + colmn;
-        subplot(oldest_cell_gen,floor(PARAMETERS.simulation_duration/6) + 1,plot_num);
-        % FREQUENCY OF CELLS WITH NUMS OF PARTICLES INTERACTING IN THIS
-        % CLASS OF CELL DIVISIONS
-        has_this_many_divs = (cell_division_class==row);
-        cells_with_divs = EVOLUTION_INFO.cell_lineage_history(has_this_many_divs,2);
-        histogram(EVOLUTION_INFO.cell_c_o_p(cells_with_divs,time_plot,2),...
-            'FaceColor', [0,0,1], 'FaceAlpha', 0.2);
-        hold on;
-        % FREQUENCY OF CELLS WITH NUMS OF PARTICLES INTERNALISED IN
-        % THIS CLASS OF CELL DIVISIONS
-        histogram(EVOLUTION_INFO.cell_c_o_p(cells_with_divs,time_plot,3),...
-            'FaceColor', [1,0,0], 'FaceAlpha', 0.2);
+    max_cell_divs_tstep = max(total.cell_lineage(:,Xth_hour_index+2));
+    min_cell_divs_tstep = min(total.cell_lineage(total.cell_lineage(:,...
+        Xth_hour_index)>0,Xth_hour_index+2));
+    % ITERATING THROUGH THE DIVISION NUMBERS PRESENT AT THIS TIMESTEP
+    rows = unique(total.cell_lineage(total.cell_lineage(:, ...
+        Xth_hour_index)>0,Xth_hour_index+2))';
+    for row = rows
+        plot_num = (row-1)*length(Xhour_indices) + time_plot;
+        subplot(max_cell_divs,length(Xhour_indices),plot_num);
+        if any(Xhourly_total.cell_c_o_p(:,:,2),'all')
+            % INTERACTING PARTICLE DISTRIBUTIONS IN CELLS HAVING DIVIDED THIS
+            % MANY TIMES
+            cells_with_divs = total.cell_lineage(total.cell_lineage(:,...
+                Xth_hour_index)==row,2);
+            histogram(total.cell_c_o_p(cells_with_divs,Xth_hour_index,2),...
+                'FaceColor', [0,0,1], 'FaceAlpha', 0.2, ...
+                'DisplayName','Interacting');
+            hold on;
+        end
+        % INTERNALISED PARTICLE DISTRIBUTIONS IN CELLS HAVING DIVIDED THIS
+        % MANY TIMES
+        histogram(total.cell_c_o_p(cells_with_divs,Xth_hour_index,3),...
+            'FaceColor', [1,0,0], 'FaceAlpha', 0.2, ...
+            'DisplayName','Internalised');
         hold off;
         xlim([0,x_max]);
-        title(['At ' num2str(time_plot-1) ' hour/s, cells with ' num2str(row) ' divisions']);
-        xlabel('Num. of particles');
-        ylabel('Cell frequ.');
-        if colmn==1
-            legend('Interacting','Internalised');
+        subtitle([num2str(row) ' cell division/s'])
+        xlabel('Num. of particles', 'Interpreter', 'latex');
+        ylabel('Cell frequ.', 'Interpreter', 'latex');
+        if row == min_cell_divs_tstep
+            title(['At ' num2str(time_plot*X) ' hour/s']);
+            if time_plot == 1
+                legend
+            end
         end
     end
 end

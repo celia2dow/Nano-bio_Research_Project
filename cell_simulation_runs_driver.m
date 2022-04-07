@@ -211,7 +211,7 @@ set(0,'DefaultFigureWindowStyle','docked') % If the setting is 'docked', the fra
 %rng(22)
 
 % Choose number of runs
-num_runs = 2;
+num_runs = 100;
 
 % Choose number of hours after which to plot
 X = 4;
@@ -240,7 +240,7 @@ PARAMETERS = struct( ...
     'culture_dim', 10, ... (cell diameters)
     'culture_media_height', 5,...  (millimeters) 0.5
     'EWT_move', 1/6, ... (hours) 
-    'EWTs_proliferate', 1e10*[100], ... [4,4,4], ... [phase 1, ..., phase K](hours) 
+    'EWTs_proliferate', 20,...1e10*[100], ... [4,4,4], ... [phase 1, ..., phase K](hours) 
     'EWTs_internalise', struct('input_type', "fraction", ... "fraction" or "EWT" or "prob_and_rates"
     'values',  [0.02,0.01,0.005,24]),... [0.02,0.01,24]), ...[0.01,0.006,24]),... [0.2,0.1,24]), ...% see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
     'max_prtcls', [inf,inf,inf], ... [stage 1, ..., stage L]
@@ -310,7 +310,11 @@ for run = 1:num_runs
     cell_start = cell_end + 1;
     cell_end = cell_end + N_final;
     total.cell_c_o_p(cell_start:cell_end,:,:) = EVOLUTION_INFO.cell_c_o_p;
-    EVOLUTION_INFO.cell_lineage_history(:,1:2) = EVOLUTION_INFO.cell_lineage_history(:,1:2) + cell_start-1;
+    EVOLUTION_INFO.cell_lineage_history(:,1:2) = ...
+        EVOLUTION_INFO.cell_lineage_history(:,1:2) + cell_start - 1;
+    EVOLUTION_INFO.cell_lineage_history(1:PARAMETERS.initial_num_cells,1) = ...
+        EVOLUTION_INFO.cell_lineage_history(1:PARAMETERS.initial_num_cells,1) - ...
+        cell_start + 1;
     total.cell_lineage(cell_start:cell_end,:) = EVOLUTION_INFO.cell_lineage_history;
     runs.average_cell_c_o_p(run,:,:) = ... % Average number of particles per cell in a class...
         [sum(EVOLUTION_INFO.cell_c_o_p(:,:,1),1)./EVOLUTION_INFO.cell_population; ... % free or hit
@@ -406,7 +410,7 @@ PCC_against_confluence;
 % other than the last transition (internalisation).
 if ~any(PARAMETERS.max_prtcls(1:end-1)~=inf)
     % Heuristic estimation of lambda1, lambda2 and CC if relevant
-    heuristic_estimates_CCintern;
+    heuristic_estimates_2params_CCintern;
     % Plot the mean ass  ociated/internalised/interacting particles over all
     % of the runs over time with standard deviation and analytical
     % distributions from heuristic estimates

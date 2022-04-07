@@ -205,7 +205,7 @@ end
 
 % Check if any of the rates (i.e. probabilities) are greater than 1. If
 % they are, cap them at 1 and send an error warning.
-if any(rates_internalise(:,:)>1)
+if any(rates_internalise(:,:)>1, 'all')
     rate_nums = rates_internalise(rates_internalise(:,:)>1,:);
     fprintf("\nERROR: input EWTs_internalise.values " + num2str(rate_nums) ...
         + " are too big. \nEither reduce them or increase the timestep size.\n")

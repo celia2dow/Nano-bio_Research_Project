@@ -44,7 +44,7 @@ if L == 2
 end
 
 % CCvalues
-if any(PARAMETERS.max_prtcls ~= inf)
+if PARAMETERS.max_prtcls(end) ~= inf
     fig29 = figure(29);
     set(fig29, 'Visible', 'off');
     if L==1
@@ -85,19 +85,17 @@ end
 fig30 = figure(30);
 set(fig30, 'Visible', 'off');
 p1 = patch([binrng fliplr(binrng)], [upper1(2,:) fliplr(lower1(2,:))], [1 0 0], ...
-        'FaceAlpha', 0.2, 'EdgeColor', 'w', 'LineStyle', '-', 'DisplayName','1 standard deviation');
+    'FaceAlpha', 0.2, 'EdgeColor', 'w', 'LineStyle', '-', 'DisplayName','1 standard deviation');
 hold on
 if L>1
     p2 = patch([binrng fliplr(binrng)], [upper1(1,:) fliplr(lower1(1,:))], [0 0 1], ...
-    'FaceAlpha', 0.2, 'EdgeColor', 'w', 'LineStyle', '-', 'DisplayName','" " "');
+        'FaceAlpha', 0.2, 'EdgeColor', 'w', 'LineStyle', '-', 'DisplayName','" " "');
     p3 = patch([binrng fliplr(binrng)], [upper1(3,:) fliplr(lower1(3,:))], [.5 0 .5], ...
         'FaceAlpha', 0.2, 'EdgeColor', 'w', 'LineStyle', '-', 'DisplayName','" " "');
     p4 = plot(binrng,means(1,:),'b', 'DisplayName','Mean bound');
     p5 = plot(binrng,means(3,:),'Color',[.5 0 .5], 'DisplayName','Mean associated (either)');
 end
 p6 = plot(binrng,means(2,:),'r', 'DisplayName','Mean internalised');
-
-
 
 % Use (Poisson inspired) MLE for lambda1
 lam1 = est_lambda1.mean; 
@@ -142,7 +140,7 @@ else
     assocUP = PARAMETERS.prtcls_per_site .* CDF.exp(lam1UP,binrng);
 end
 
-if any(PARAMETERS.max_prtcls ~= inf)
+if PARAMETERS.max_prtcls(end) ~= inf
     if L==1
         CC = est_CC.using_MLE_Poisson; 
         CCUP = est_CCUP.using_MLE_Poisson; 
@@ -243,8 +241,91 @@ legend('Location','Best')
 ylim([0 max(upper1,[],'all')])
 title(tit_str);
 subtitle(sub_str);
+ylabel('Num. particles', 'Interpreter', 'latex')
 xlabel('time $t$ hours', 'Interpreter', 'latex');
 pbaspect([1 1 1])
+
+% Printing time series averages split by number of cell divisions
+fig31 = figure(31);
+set(fig31, 'Visible', 'off');
+max_cell_divs = max(total.cell_lineage(:,3:end),[],'all');
+store_means = zeros(max_cell_divs,total_tsteps+1,3);
+store_stddev = zeros(max_cell_divs,total_tsteps+1,3);
+% Iterate through cell divisions
+for num_divs = 1:max(total.cell_lineage(:,tstep+2)) 
+    for tstep = 1:total_tsteps+1 
+        cells_concerned = total.cell_lineage(total.cell_lineage(:,tstep+2)==num_divs,2);
+        if cells_concerned
+            interacting_at_tstep = mean(total.cell_c_o_p(cells_concerned,tstep,2));
+            internalised_at_tstep = mean(total.cell_c_o_p(cells_concerned,tstep,3));
+            associated_at_tstep = interacting_at_tstep + internalised_at_tstep;
+            var_intera = var(total.cell_c_o_p(cells_concerned,tstep,2));
+            var_intern = var(total.cell_c_o_p(cells_concerned,tstep,3));
+            var_assoc = var(sum(total.cell_c_o_p(cells_concerned,tstep,2:3),1));
+        else
+            interacting_at_tstep = 0;
+            internalised_at_tstep = 0;
+            associated_at_tstep = 0;
+            var_intera = 0;
+            var_intern = 0;
+            var_assoc = 0;
+        end
+        
+        store_means(num_divs,tstep,:) = [interacting_at_tstep, ...
+            internalised_at_tstep, associated_at_tstep];
+        store_stddev(num_divs,tstep,:) = [sqrt(var_intera), ...
+            sqrt(var_intern), sqrt(var_assoc)];
+    end
+    if any(total.cell_c_o_p(:,:,2)>0,"all")
+        % Plot associated particles over time
+        subplot(1,2,1)
+        hold on
+        pl1 = plot(binrng,store_means(num_divs,:,3), 'DisplayName',...
+            [num2str(num_divs) ' cell divisions']);
+        col1 = pl1.Color;
+        %patch([binrng fliplr(binrng)], [squeeze(store_means(num_divs,:,3)+store_stddev(num_divs,:,3)) ...
+        %    fliplr(squeeze(store_means(num_divs,:,3)-store_stddev(num_divs,:,3)))], col1, ...
+        %    'FaceAlpha', 0.2, 'EdgeColor', 'w', 'LineStyle', '-', 'DisplayName','1 standard deviation');
+        hold off
+        ylabel('Num. particles', 'Interpreter', 'latex')
+        xlabel('time $t$ hours', 'Interpreter', 'latex');
+        title("Mean number of paticles associated")
+        legend("Location","northwest")
+        pbaspect([1 1 1])
+        % Plot internalised particles over time
+        subplot(1,2,2)
+        hold on
+        pl2 = plot(binrng,store_means(num_divs,:,2), 'DisplayName',...
+            [num2str(num_divs) ' cell divisions']);
+        col2 = pl2.Color;
+        %patch([binrng fliplr(binrng)], [squeeze(store_means(num_divs,:,2)+store_stddev(num_divs,:,2)) ...
+        %    fliplr(squeeze(store_means(num_divs,:,2)-store_stddev(num_divs,:,2)))], col2, ...
+        %    'FaceAlpha', 0.2, 'EdgeColor', 'w', 'LineStyle', '-', 'DisplayName','1 standard deviation');
+        hold off
+        xlabel('time $t$ hours', 'Interpreter', 'latex');
+        title("Mean number of paticles internalised")
+        legend("Location","northwest")
+        pbaspect([1 1 1])
+
+        sgtitle('Particle dosages split by number of cell divisions');
+    else
+        % Plot internalised particles over time
+        hold on
+        pl1 = plot(binrng,store_means(num_divs,:,2), 'DisplayName',...
+            ['Mean internalised for ' num2str(num_divs) ' cell divisions']);
+        col1 = pl1.Color;
+        %patch([binrng fliplr(binrng)], [squeeze(store_means(num_divs,:,2)+store_stddev(num_divs,:,2)) ...
+        %    fliplr(squeeze(store_means(num_divs,:,2)-store_stddev(num_divs,:,2)))], col1, ...
+        %    'FaceAlpha', 0.2, 'EdgeColor', 'w', 'LineStyle', '-', 'DisplayName','1 standard deviation');
+        hold off
+        ylabel('Num. particles', 'Interpreter', 'latex')
+        xlabel('time $t$ hours', 'Interpreter', 'latex');
+        title('Internalised particle dosages split by number of cell divisions');
+        legend("Location","northwest")
+        pbaspect([1 1 1])
+    end
+
+end
 
 % Save figures
 fig27.Position = [100,100,1300,700];
@@ -255,5 +336,10 @@ fig30.Position = [100,100,1300,700];
 saveas(fig30, [PARAMETERS.folder_path '/Analytical_distribs'], 'eps')
 saveas(fig30, [PARAMETERS.folder_path '/Analytical_distribs'], 'png')
 
+fig31.Position = [100,100,1300,700];
+saveas(fig31, [PARAMETERS.folder_path '/Time_series_split_by_divs'], 'eps')
+saveas(fig31, [PARAMETERS.folder_path '/Time_series_split_by_divs'], 'png')
+
 figure(fig27)
 figure(fig30)
+figure(fig31)

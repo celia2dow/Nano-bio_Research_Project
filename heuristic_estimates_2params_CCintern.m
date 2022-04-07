@@ -285,7 +285,7 @@ end
 %   via DYNAMIC RATE calculated from DIFFERENCES METHOD
 %   via DYNAMIC RATE calculated from MIX METHOD
 %   via MLE METHOD (for case with 1 internalisation rate)
-if any(PARAMETERS.max_prtcls ~= inf) && L<=2
+if PARAMETERS.max_prtcls(end) ~= inf && L<=2
     % The number of internalised particles per cell at the start of a 
     % timestep is the number of internalised particles per cell at the end
     % of the previous timestep.
