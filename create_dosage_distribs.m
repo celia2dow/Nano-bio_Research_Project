@@ -1,4 +1,4 @@
-function create_dosage_distribs(X, total_tsteps, PARAMETERS, total, FLUORESC)
+function create_dosage_distribs(X, total_tsteps, PARAMETERS, total, FLUORESC, num_runs)
 % CREATE_DOSAGE_DISTRIBS creates dosage distributions, fluorescence plots, 
 % and dosages split by number of cell divisions after every X hours.
 
@@ -105,40 +105,40 @@ for time_plot = 1:length(Xhour_indices)
     cb = colorbar();
     cb.Label.String = 'Density estimate';
 
-%     % FREQUENCY HISTOGRAMS PER NUM OF CELL DIVISIONS EVERY X HOURS
-%     set(0,'CurrentFigure',fig9)
-%     cell_division_class = zeros(1,N_tstep);
-%     if N_tstep>PARAMETERS.initial_num_cells
-%         division_history = total.cell_lineage_history(...
-%             total.cell_lineage_history(:,1)%PARAMETERS.initial_num_cells+1:N_tstep,1);
-%         edges = (0.5:1:max(division_history)+0.5);
-%         cell_division_class = cell_division_class(1:max(division_history)) + histcounts(division_history',edges);
-%     end
-%     rows = unique(cell_division_class);
-%     
-%     for row = rows % ITERATING THROUGH THE DIVISION NUMBERS PRESENT AT THIS TIMESTEP
-%         plot_num = row*(floor(PARAMETERS.simulation_duration/6) + 1) + colmn;
-%         subplot(oldest_cell_gen,floor(PARAMETERS.simulation_duration/6) + 1,plot_num);
-%         % FREQUENCY OF CELLS WITH NUMS OF PARTICLES INTERACTING IN THIS
-%         % CLASS OF CELL DIVISIONS
-%         has_this_many_divs = (cell_division_class==row);
-%         cells_with_divs = EVOLUTION_INFO.cell_lineage_history(has_this_many_divs,2);
-%         histogram(EVOLUTION_INFO.cell_c_o_p(cells_with_divs,time_plot,2),...
-%             'FaceColor', [0,0,1], 'FaceAlpha', 0.2);
-%         hold on;
-%         % FREQUENCY OF CELLS WITH NUMS OF PARTICLES INTERNALISED IN
-%         % THIS CLASS OF CELL DIVISIONS
-%         histogram(EVOLUTION_INFO.cell_c_o_p(cells_with_divs,time_plot,3),...
-%             'FaceColor', [1,0,0], 'FaceAlpha', 0.2);
-%         hold off;
-%         xlim([0,x_max]);
-%         title(['At ' num2str(time_plot-1) ' hour/s, cells with ' num2str(row) ' divisions']);
-%         xlabel('Num. of particles');
-%         ylabel('Cell frequ.');
-%         if colmn==1
-%             legend('Interacting','Internalised');
-%         end
-%     end
+    % FREQUENCY HISTOGRAMS PER NUM OF CELL DIVISIONS EVERY X HOURS
+    set(0,'CurrentFigure',fig9)
+    cell_division_class = zeros(1,N_tstep);
+    if N_tstep>PARAMETERS.initial_num_cells*num_runs
+        division_history = total.cell_lineage_history(...
+            total.cell_lineage_history(:,Xth_hour_index+2);%PARAMETERS.initial_num_cells+1:N_tstep,1);
+        edges = (0.5:1:max(division_history)+0.5);
+        cell_division_class = cell_division_class(1:max(division_history)) + histcounts(division_history',edges);
+    end
+    rows = unique(cell_division_class);
+    
+    for row = rows % ITERATING THROUGH THE DIVISION NUMBERS PRESENT AT THIS TIMESTEP
+        plot_num = row*(floor(PARAMETERS.simulation_duration/6) + 1) + colmn;
+        subplot(oldest_cell_gen,floor(PARAMETERS.simulation_duration/6) + 1,plot_num);
+        % FREQUENCY OF CELLS WITH NUMS OF PARTICLES INTERACTING IN THIS
+        % CLASS OF CELL DIVISIONS
+        has_this_many_divs = (cell_division_class==row);
+        cells_with_divs = EVOLUTION_INFO.cell_lineage_history(has_this_many_divs,2);
+        histogram(EVOLUTION_INFO.cell_c_o_p(cells_with_divs,time_plot,2),...
+            'FaceColor', [0,0,1], 'FaceAlpha', 0.2);
+        hold on;
+        % FREQUENCY OF CELLS WITH NUMS OF PARTICLES INTERNALISED IN
+        % THIS CLASS OF CELL DIVISIONS
+        histogram(EVOLUTION_INFO.cell_c_o_p(cells_with_divs,time_plot,3),...
+            'FaceColor', [1,0,0], 'FaceAlpha', 0.2);
+        hold off;
+        xlim([0,x_max]);
+        title(['At ' num2str(time_plot-1) ' hour/s, cells with ' num2str(row) ' divisions']);
+        xlabel('Num. of particles');
+        ylabel('Cell frequ.');
+        if colmn==1
+            legend('Interacting','Internalised');
+        end
+    end
 end
 
 % Save figures
