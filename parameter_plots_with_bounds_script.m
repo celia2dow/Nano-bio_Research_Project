@@ -49,10 +49,10 @@ if PARAMETERS.max_prtcls(end) ~= inf
     set(fig29, 'Visible', 'off');
     if L==1
         % MLE Poisson method
-        plot(binrng(1:end-1),est_CC.using_MLE_Poisson, 'r--', 'LineWidth', 1.5)
+        plot(binrng(1:end-1),est_CC.using_mean_mean, 'r--', 'LineWidth', 1.5)
         hold on
-        plot(binrng(1:end-1),est_CCUP.using_MLE_Poisson, 'r:')
-        plot(binrng(1:end-1),est_CCLO.using_MLE_Poisson, 'r:')
+        plot(binrng(1:end-1),est_CCUP.using_mean_mean, 'r:')
+        plot(binrng(1:end-1),est_CCLO.using_mean_mean, 'r:')
         hold off
     elseif L==2
         % Differences method
@@ -122,8 +122,9 @@ if total.cell_population(end) ~= total.cell_population(1)
     lam1 = lam1 .* scaling;
 end
 
-% Association curves: mean, lower, upper
+% If there are no proliferation events
 if total.cell_population(1)==total.cell_population(end)
+    % Association curves: mean, lower, upper
     assoc = PARAMETERS.prtcls_per_site .* CDF.exp(...
         total.confluence(1).*lam1,binrng) ./ ...
         total.confluence(1);
@@ -133,70 +134,140 @@ if total.cell_population(1)==total.cell_population(end)
     assocUP = PARAMETERS.prtcls_per_site .* CDF.exp(...
         total.confluence(1).*lam1UP,binrng)./ ...
         total.confluence(1);
+    % Internalisation curves: mean, lower, upper
+    if PARAMETERS.max_prtcls(end) ~= inf % If there is CC implemented
+        if L==1
+            CC = est_CC.using_mean_mean; 
+            CCUP = est_CCUP.using_mean_mean; 
+            CCLO = est_CCLO.using_mean_mean;
+            interns = analytic_distrib_with_CC(binrng,lam1,CC,PARAMETERS, ...
+                CDF.hypoexp_l1,CDF.exp,assoc,L,total);
+            internsLO = analytic_distrib_with_CC(binrng,lam1LO,CC,PARAMETERS, ...
+                CDF.hypoexp_l1UP,CDF.exp,assocUP,L,total);
+            internsUP = analytic_distrib_with_CC(binrng,lam1UP,CC,PARAMETERS, ...
+                CDF.hypoexp_l1LO,CDF.exp,assocLO,L,total);
+            sub_str = ['Heuristic estimates: \lambda_1: ' num2str(est_lambda1.mean)...
+                ', CC: ' num2str(CC)];
+            tit_str = ['Internalised per cell ~ true values:'...
+                ' \lambda_1: ' num2str(lambdas(1)) ...
+                ', CC: ' num2str(PARAMETERS.max_prtcls(end))];
+        elseif L==2
+            % Use differences for CC.
+            CC = est_CC.using_diffs_mean; 
+            CCUP = est_CCUP.using_diffs_mean; 
+            CCLO = est_CCLO.using_diffs_mean;
+            interns = analytic_distrib_with_CC(binrng,lam2,CC,PARAMETERS, ...
+                CDF.hypoexp_l1,CDF.exp,assoc,L,total);
+            internsLO = analytic_distrib_with_CC(binrng,lam2LO,CC,PARAMETERS, ...
+                CDF.hypoexp_l1UP,CDF.exp,assocUP,L,total);
+            internsUP = analytic_distrib_with_CC(binrng,lam2UP,CC,PARAMETERS, ...
+                CDF.hypoexp_l1LO,CDF.exp,assocLO,L,total);
+            sub_str = ['Heuristic estimates: \lambda_1: ' num2str(est_lambda1.mean)...
+                ', \lambda_2: ' num2str(lam2)...
+                ', CC: ' num2str(CC)];
+            tit_str = ['Associated, bound, internalised per cell ~ true values:'...
+                ' \lambda_1: ' num2str(lambdas(1)) ...
+                ', \lambda_2: ' num2str(lambdas(2)) ...
+                ', CC: ' num2str(PARAMETERS.max_prtcls(end))];
+        else
+            sub_str = ['Heuristic estimates: \lambda_1: ' num2str(est_lambda1.mean)];
+            tit_str = ['Associated per cell ~ true values: '...
+                ' \lambda_1: ' num2str(lambdas(1))];
+        end
+    else % If there isn't CC implemented
+        if L==1
+            interns = assoc;
+            internsLO = assocLO;
+            internsUP = assocUP;
+            sub_str = ['Heuristic estimates: \lambda_1: ' num2str(est_lambda1.mean)];
+            tit_str = ['Internalised per cell ~ true values: '...
+                ' \lambda_1: ' num2str(lambdas(1))];
+        elseif L==2
+            % Internalisation curves: mean, lower, upper
+            interns = PARAMETERS.prtcls_per_site .* CDF.hypoexp_l1(lam2,binrng);
+            internsLO = PARAMETERS.prtcls_per_site .* CDF.hypoexp_l1UP(lam2LO,binrng);
+            internsUP = PARAMETERS.prtcls_per_site .* CDF.hypoexp_l1LO(lam2UP,binrng);
+            sub_str = ['Heuristic estimates: \lambda_1: ' num2str(est_lambda1.mean)...
+                ', \lambda_2: ' num2str(lam2)];
+            tit_str = ['Associated, bound, internalised per cell ~ true values: '...
+                ' \lambda_1: ' num2str(lambdas(1)) ...
+                ', \lambda_2: ' num2str(lambdas(2))];
+        else
+            sub_str = ['Heuristic estimates: \lambda_1: ' num2str(est_lambda1.mean)];
+            tit_str = ['Associated per cell ~ true values: '...
+                ' \lambda_1: ' num2str(lambdas(1))];
+        end
+    end
+% If there are proliferation events
 else
+    % Association curves: mean, lower, upper
     fprintf("\nWARNING confluence not accounted for in estimates\n")
     assoc = PARAMETERS.prtcls_per_site .* CDF.exp(lam1,binrng);
     assocLO = PARAMETERS.prtcls_per_site .* CDF.exp(lam1LO,binrng);
     assocUP = PARAMETERS.prtcls_per_site .* CDF.exp(lam1UP,binrng);
-end
-
-if PARAMETERS.max_prtcls(end) ~= inf
-    if L==1
-        CC = est_CC.using_MLE_Poisson; 
-        CCUP = est_CCUP.using_MLE_Poisson; 
-        CCLO = est_CCLO.using_MLE_Poisson;
-        interns = analytic_distrib_with_CC(binrng,lam1,CC,PARAMETERS, ...
-            CDF.hypoexp_l1,CDF.exp,assoc,L);
-        internsLO = analytic_distrib_with_CC(binrng,lam1LO,CC,PARAMETERS, ...
-            CDF.hypoexp_l1UP,CDF.exp,assocUP,L);
-        internsUP = analytic_distrib_with_CC(binrng,lam1UP,CC,PARAMETERS, ...
-            CDF.hypoexp_l1LO,CDF.exp,assocLO,L);
-        sub_str = ['Heuristic estimates: \lambda_1: ' num2str(est_lambda1.mean)...
-            ', CC: ' num2str(CC)];
-        tit_str = ['Internalised per cell ~ true values:'...
-            ' \lambda_1: ' num2str(lambdas(1)) ...
-            ', CC: ' num2str(PARAMETERS.max_prtcls(end))];
-    elseif L==2
-        % Use differences for CC.
-        CC = est_CC.using_diffs_mean; 
-        CCUP = est_CCUP.using_diffs_mean; 
-        CCLO = est_CCLO.using_diffs_mean;
-        interns = analytic_distrib_with_CC(binrng,lam2,CC,PARAMETERS, ...
-            CDF.hypoexp_l1,CDF.exp,assoc,L);
-        internsLO = analytic_distrib_with_CC(binrng,lam2LO,CC,PARAMETERS, ...
-            CDF.hypoexp_l1UP,CDF.exp,assocUP,L);
-        internsUP = analytic_distrib_with_CC(binrng,lam2UP,CC,PARAMETERS, ...
-            CDF.hypoexp_l1LO,CDF.exp,assocLO,L);
-        sub_str = ['Heuristic estimates: \lambda_1: ' num2str(est_lambda1.mean)...
-            ', \lambda_2: ' num2str(lam2)...
-            ', CC: ' num2str(CC)];
-        tit_str = ['Associated, bound, internalised per cell ~ true values:'...
-            ' \lambda_1: ' num2str(lambdas(1)) ...
-            ', \lambda_2: ' num2str(lambdas(2)) ...
-            ', CC: ' num2str(PARAMETERS.max_prtcls(end))];
-    end
-else 
-    if L==1
-        interns = assoc;
-        internsLO = assocLO;
-        internsUP = assocUP;
-        sub_str = ['Heuristic estimates: \lambda_1: ' num2str(est_lambda1.mean)];
-        tit_str = ['Internalised per cell ~ true values: '...
-            ' \lambda_1: ' num2str(lambdas(1))];
-    elseif L==2
-        % Internalisation curves: mean, lower, upper
-        interns = PARAMETERS.prtcls_per_site .* CDF.hypoexp_l1(lam2,binrng);
-        internsLO = PARAMETERS.prtcls_per_site .* CDF.hypoexp_l1UP(lam2LO,binrng);
-        internsUP = PARAMETERS.prtcls_per_site .* CDF.hypoexp_l1LO(lam2UP,binrng);
-        sub_str = ['Heuristic estimates: \lambda_1: ' num2str(est_lambda1.mean)...
-            ', \lambda_2: ' num2str(lam2)];
-        tit_str = ['Associated, bound, internalised per cell ~ true values: '...
-            ' \lambda_1: ' num2str(lambdas(1)) ...
-            ', \lambda_2: ' num2str(lambdas(2))];
-    else
-        sub_str = ['Heuristic estimates: \lambda_1: ' num2str(est_lambda1.mean)];
-        tit_str = ['Associated per cell ~ true values: '...
-            ' \lambda_1: ' num2str(lambdas(1))];
+    % Internalisation curves: mean, lower, upper
+    if PARAMETERS.max_prtcls(end) ~= inf % If there is CC implemented
+        if L==1
+            CC = est_CC.using_mean_mean; 
+            CCUP = est_CCUP.using_mean_mean; 
+            CCLO = est_CCLO.using_mean_mean;
+            interns = analytic_distrib_with_CC(binrng,lam1,CC,PARAMETERS, ...
+                CDF.hypoexp_l1,CDF.exp,assoc,L,total);
+            internsLO = analytic_distrib_with_CC(binrng,lam1LO,CC,PARAMETERS, ...
+                CDF.hypoexp_l1UP,CDF.exp,assocUP,L,total);
+            internsUP = analytic_distrib_with_CC(binrng,lam1UP,CC,PARAMETERS, ...
+                CDF.hypoexp_l1LO,CDF.exp,assocLO,L,total);
+            sub_str = ['Heuristic estimates: \lambda_1: ' num2str(est_lambda1.mean)...
+                ', CC: ' num2str(CC)];
+            tit_str = ['Internalised per cell ~ true values:'...
+                ' \lambda_1: ' num2str(lambdas(1)) ...
+                ', CC: ' num2str(PARAMETERS.max_prtcls(end))];
+        elseif L==2
+            % Use differences for CC.
+            CC = est_CC.using_diffs_mean; 
+            CCUP = est_CCUP.using_diffs_mean; 
+            CCLO = est_CCLO.using_diffs_mean;
+            interns = analytic_distrib_with_CC(binrng,lam2,CC,PARAMETERS, ...
+                CDF.hypoexp_l1,CDF.exp,assoc,L,total);
+            internsLO = analytic_distrib_with_CC(binrng,lam2LO,CC,PARAMETERS, ...
+                CDF.hypoexp_l1UP,CDF.exp,assocUP,L,total);
+            internsUP = analytic_distrib_with_CC(binrng,lam2UP,CC,PARAMETERS, ...
+                CDF.hypoexp_l1LO,CDF.exp,assocLO,L,total);
+            sub_str = ['Heuristic estimates: \lambda_1: ' num2str(est_lambda1.mean)...
+                ', \lambda_2: ' num2str(lam2)...
+                ', CC: ' num2str(CC)];
+            tit_str = ['Associated, bound, internalised per cell ~ true values:'...
+                ' \lambda_1: ' num2str(lambdas(1)) ...
+                ', \lambda_2: ' num2str(lambdas(2)) ...
+                ', CC: ' num2str(PARAMETERS.max_prtcls(end))];
+        else
+            sub_str = ['Heuristic estimates: \lambda_1: ' num2str(est_lambda1.mean)];
+            tit_str = ['Associated per cell ~ true values: '...
+                ' \lambda_1: ' num2str(lambdas(1))];
+        end
+    else % If there isn't CC implemented
+        if L==1
+            interns = assoc;
+            internsLO = assocLO;
+            internsUP = assocUP;
+            sub_str = ['Heuristic estimates: \lambda_1: ' num2str(est_lambda1.mean)];
+            tit_str = ['Internalised per cell ~ true values: '...
+                ' \lambda_1: ' num2str(lambdas(1))];
+        elseif L==2
+            % Internalisation curves: mean, lower, upper
+            interns = PARAMETERS.prtcls_per_site .* CDF.hypoexp_l1(lam2,binrng);
+            internsLO = PARAMETERS.prtcls_per_site .* CDF.hypoexp_l1UP(lam2LO,binrng);
+            internsUP = PARAMETERS.prtcls_per_site .* CDF.hypoexp_l1LO(lam2UP,binrng);
+            sub_str = ['Heuristic estimates: \lambda_1: ' num2str(est_lambda1.mean)...
+                ', \lambda_2: ' num2str(lam2)];
+            tit_str = ['Associated, bound, internalised per cell ~ true values: '...
+                ' \lambda_1: ' num2str(lambdas(1)) ...
+                ', \lambda_2: ' num2str(lambdas(2))];
+        else
+            sub_str = ['Heuristic estimates: \lambda_1: ' num2str(est_lambda1.mean)];
+            tit_str = ['Associated per cell ~ true values: '...
+                ' \lambda_1: ' num2str(lambdas(1))];
+        end
     end
 end
 

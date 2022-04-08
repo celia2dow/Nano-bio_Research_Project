@@ -211,7 +211,7 @@ set(0,'DefaultFigureWindowStyle','docked') % If the setting is 'docked', the fra
 %rng(22)
 
 % Choose number of runs
-num_runs = 100;
+num_runs = 200;
 
 % Choose number of hours after which to plot
 X = 4;
@@ -240,10 +240,10 @@ PARAMETERS = struct( ...
     'culture_dim', 10, ... (cell diameters)
     'culture_media_height', 5,...  (millimeters) 0.5
     'EWT_move', 1/6, ... (hours) 
-    'EWTs_proliferate', 20,...1e10*[100], ... [4,4,4], ... [phase 1, ..., phase K](hours) 
+    'EWTs_proliferate', 1e10*[100], ... [4,4,4], ... [phase 1, ..., phase K](hours) 
     'EWTs_internalise', struct('input_type', "fraction", ... "fraction" or "EWT" or "prob_and_rates"
-    'values',  [0.02,0.01,0.005,24]),... [0.02,0.01,24]), ...[0.01,0.006,24]),... [0.2,0.1,24]), ...% see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
-    'max_prtcls', [inf,inf,inf], ... [stage 1, ..., stage L]
+    'values', [0.02,24]), ...[0.02,0.01,0.005,24]),... [0.02,0.01,24]), ...[0.01,0.006,24]),... [0.2,0.1,24]), ...% see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
+    'max_prtcls', [40], ... [stage 1, ..., stage L]
     'prob_inherit', 0.7, ...     
     'temp', 36, ... (degrees celsius)    
     'viscos', 1.0005E-3,... (kiloggrams / (meter*second))      
@@ -400,7 +400,7 @@ close all
 % bound/internalised), secondary fluoerescence against primary
 % fluorescence, and deosages split by number of cell divisions after every X 
 % hours
-create_dosage_distribs(X, total_tsteps, PARAMETERS, total, FLUORESC, num_runs);
+create_dosage_distribs(X, total_tsteps, PARAMETERS, total, FLUORESC);
 
 % Plot the mean Pair Correlation Coefficient over time (the mean PCC at
 % each timestep across all of the run PCCs and the variance in the mean)

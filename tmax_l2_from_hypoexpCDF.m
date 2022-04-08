@@ -1,5 +1,5 @@
 function [tmax_noCC, l2_mean, l2_array] = tmax_l2_from_hypoexpCDF(times,...
-    hypoCDF,av_data,PARAMETERS,guess,l1_mean,tol_l2)
+    hypoCDF,av_data,PARAMETERS,guess,tol_l2)
 % TMAX_L2_FROM_HYPOEXPOCDF estimates lambda2 by equating the data (av_data)
 % on average numbers of particles internalised over the initial dosage of 
 % particles per cell (PARAMETERS.prtcls_per_cell) to the hypoexponential CDF
@@ -28,9 +28,6 @@ for i = 1:length(l2_array)
     % Estimate lambda2 by finding the root of this function (away from lambda1)
     % i.e., by substituting the data into the hypoexponential distribution
     l2_array(i) = fzero(func,guess);
-    if l2_array(i) == l1_mean
-        l2_array(i) = fzero(func,guess(1));
-    end
 end
 
 % CALCULATE TMAX_NOCC

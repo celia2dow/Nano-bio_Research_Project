@@ -1,4 +1,4 @@
-function create_dosage_distribs(X, total_tsteps, PARAMETERS, total, FLUORESC, num_runs)
+function create_dosage_distribs(X, total_tsteps, PARAMETERS, total, FLUORESC)
 % CREATE_DOSAGE_DISTRIBS creates dosage distributions, fluorescence plots, 
 % and dosages split by number of cell divisions after every X hours.
 
@@ -119,11 +119,11 @@ for time_plot = 1:length(Xhour_indices)
     for row = rows
         plot_num = (row-1)*length(Xhour_indices) + time_plot;
         subplot(max_cell_divs,length(Xhour_indices),plot_num);
+        cells_with_divs = total.cell_lineage(total.cell_lineage(:,...
+            Xth_hour_index)==row,2);
         if any(Xhourly_total.cell_c_o_p(:,:,2),'all')
             % INTERACTING PARTICLE DISTRIBUTIONS IN CELLS HAVING DIVIDED THIS
             % MANY TIMES
-            cells_with_divs = total.cell_lineage(total.cell_lineage(:,...
-                Xth_hour_index)==row,2);
             histogram(total.cell_c_o_p(cells_with_divs,Xth_hour_index,2),...
                 'FaceColor', [0,0,1], 'FaceAlpha', 0.2, ...
                 'DisplayName','Interacting');

@@ -146,6 +146,15 @@ if total.cell_population(1)==total.cell_population(end)
         length(est_lambda1.MLE_Poisson)])));
     est_lambda1LO.mean = est_lambda1LO.MLE_Poisson_mean;
 else
+    % Expected waiting time for a cell to attempt to proliferate
+    p = sum(PARAMETERS.EWTs_proliferate);
+    % Cell population as captured by logistic growth
+    Cbar = @(t) PARAMETERS.culture_dim.^2 .* PARAMETERS.initial_num_cells ...
+        ./(PARAMETERS.initial_num_cells + (PARAMETERS.culture_dim.^2-PARAMETERS.initial_num_cells) ...
+        .* exp(-t./p));
+    coeff = @(t) PARAMETERS.prtcls_per_site./Cbar(t);
+    integrand = @(tau,l) l.*Cbar(tau).*exp(-l.*Cbar(tau).*tau);
+    numeric_int = @(t,l) integral(@(tau,l) integrand(tau,l), 0, t);
     est_lambda1.mean = est_lambda1.MLE_mean;
     est_lambda1UP.mean = est_lambda1UP.MLE_mean;
     est_lambda1LO.mean = est_lambda1LO.MLE_mean;
@@ -153,9 +162,18 @@ end
 
 % CDF of hypoexponential distribution
 CDF.hypoexp = @(l1, l2, t) 1 - 1./(l2-l1) .* (l2 .* exp(-l1 .* t) - l1 .* exp(-l2 .* t));
-CDF.hypoexp_l1 = @(l2,t) CDF.hypoexp(est_lambda1.mean,l2,t); 
-CDF.hypoexp_l1UP = @(l2,t) CDF.hypoexp(est_lambda1UP.mean,l2,t); % Upper bound
-CDF.hypoexp_l1LO = @(l2,t) CDF.hypoexp(est_lambda1LO.mean,l2,t); % Lower bound
+if total.cell_population(end) ~= total.cell_population(1)
+    CDF.hypoexp_l1 = @(l2,t) CDF.hypoexp(est_lambda1.mean .* ...
+        total.confluence(1),l2,t) ./ total.confluence(1); 
+    CDF.hypoexp_l1UP = @(l2,t) CDF.hypoexp(est_lambda1UP.mean .* ... % Upper bound
+        total.confluence(1),l2,t) ./ total.confluence(1); 
+    CDF.hypoexp_l1LO = @(l2,t) CDF.hypoexp(est_lambda1LO.mean .* ... % Lower bound
+        total.confluence(1),l2,t) ./ total.confluence(1); 
+else
+    CDF.hypoexp_l1 = @(l2,t) CDF.hypoexp(est_lambda1.mean,l2,t); 
+    CDF.hypoexp_l1UP = @(l2,t) CDF.hypoexp(est_lambda1UP.mean,l2,t); % Upper bound
+    CDF.hypoexp_l1LO = @(l2,t) CDF.hypoexp(est_lambda1LO.mean,l2,t); % Lower bound
+end
 CDF.hypoexp_l1_tstep = @(l2) CDF.hypoexp_l1(l2,PARAMETERS.tstep_duration); 
 CDF.hypoexp_l1UP_tstep = @(l2) CDF.hypoexp_l1UP(l2,PARAMETERS.tstep_duration); % Upper bound
 CDF.hypoexp_l1LO_tstep = @(l2) CDF.hypoexp_l1LO(l2,PARAMETERS.tstep_duration); % Lower bound
@@ -172,15 +190,15 @@ if L==2
     %   via DISTRIBUTION method
     [tmax_noCC,est_lambda2.distrib_mean,est_lambda2.distrib] = ... 
         tmax_l2_from_hypoexpCDF(binrng,CDF.hypoexp_l1,means,...
-        PARAMETERS,guess,est_lambda1.mean,tol);
+        PARAMETERS,guess,tol);
     % Upper bound lambda2 (assuming lower bound lambda1)
     [~,est_lambda2UP.distrib_mean,est_lambda2UP.distrib] = ... 
         tmax_l2_from_hypoexpCDF(binrng,CDF.hypoexp_l1LO,upper1,...
-        PARAMETERS,guessLO,est_lambda1LO.mean,tol);
+        PARAMETERS,guessLO,tol);
     % Lower bound lambda2 (assuming upper bound lambda1)
     [~,est_lambda2LO.distrib_mean,est_lambda2LO.distrib] = ... 
         tmax_l2_from_hypoexpCDF(binrng,CDF.hypoexp_l1UP,lower1,...
-        PARAMETERS,guessUP,est_lambda1UP.mean,tol);
+        PARAMETERS,guessUP,tol);
     
     % ESTIMATE LAMBDA 2
     %   via MIX method
@@ -294,8 +312,6 @@ if PARAMETERS.max_prtcls(end) ~= inf && L<=2
     internalPrtcls_start_of_tLO = lower1(2,1:(end-1)); % for timestep 1, 2, ...
     
     % Prepare input for CC_GIVEN_FRACTION
-    using_diffs = gradient(means(2,2:end),PARAMETERS.tstep_duration) ./ ... 
-        (interactPrtcls_start_of_t .* est_lambda2.using_diffs_mean);
     if L == 1
         if total.cell_population(1)==total.cell_population(end)
             meth = est_lambda1.MLE_Poisson./est_lambda1.mean;
@@ -305,6 +321,8 @@ if PARAMETERS.max_prtcls(end) ~= inf && L<=2
         frction = [meth];
         methods = {'using_mean'};
     else
+        using_diffs = gradient(means(2,2:end),PARAMETERS.tstep_duration) ./ ... 
+            (interactPrtcls_start_of_t .* est_lambda2.using_diffs_mean);
         dynamic_diffs= [0 est_lambda2.using_diffs]./est_lambda2.using_diffs_mean;
         dynamic_mix= est_lambda2.mix./est_lambda2.mix_mean;
         frction = [using_diffs; dynamic_diffs; dynamic_mix];
@@ -353,7 +371,7 @@ if PARAMETERS.max_prtcls(end) ~= inf && L<=2
     fprintf('\nMETHOD \t\t\t\tMEAN \tLOWER ESTIMATE \tUPPER ESTIMATE')
     if L == 1
         fprintf('\nMLE method \t\t\t%5.3f \t%5.3f \t\t%5.3f\n',...
-            est_CC.using_MLE_Poisson, est_CCLO.using_MLE_Poisson, est_CCUP.using_MLE_Poisson);
+            est_CC.using_mean_mean, est_CCLO.using_mean_mean, est_CCUP.using_mean_mean);
     else
         fprintf('\nDifferences \t\t\t%5.3f \t%5.3f \t\t%5.3f',...
             est_CC.using_diffs_mean, est_CCLO.using_diffs_mean, est_CCUP.using_diffs_mean);
