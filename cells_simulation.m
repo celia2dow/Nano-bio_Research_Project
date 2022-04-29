@@ -86,6 +86,18 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 %                                   the CDF of the hypo-exponential 
 %                                   distribution with these rates satisfy 
 %                                   F(24)=i.
+%       EWTs_recycle (hours)        Expected waiting time for one particle
+%                                   that is interacting with a cell to be
+%                                   recycled back into the culture medium.
+%                                   Typically particles in stages 1 (bound)
+%                                   and L-1 (just prior to internalisation)
+%                                   will have the opportunity to exit the
+%                                   process (unbind or be recycled before
+%                                   therapeutics are delivered). A particle 
+%                                   that is internalised (in stage L)
+%                                   cannot be recycled. If wanting to
+%                                   create this scenario, set all other
+%                                   waiting times to be infinity.
 %       max_prtcls                  The particle capacities of each of the
 %                                   L cell-particle interaction model
 %                                   stages (i.e., capacity of stage 1, ...,
@@ -204,11 +216,11 @@ elseif PARAMETERS.EWTs_internalise.input_type == "prob_and_rates"
 end
 
 % Check if any of the rates (i.e. probabilities) are greater than 1. If
-% they are, cap them at 1 and send an error warning.
+% they are, cap them at 1 and send a warning.
 if any(rates_internalise(:,:)>1, 'all')
     rate_nums = rates_internalise(rates_internalise(:,:)>1,:);
-    fprintf("\nERROR: input EWTs_internalise.values " + num2str(rate_nums) ...
-        + " are too big. \nEither reduce them or increase the timestep size.\n")
+    warning("Input EWTs_internalise.values " + num2str(rate_nums) ...
+        + " are too big. \nEither reduce them or increase the timestep size")
     rates_internalise(rates_internalise(:,:)>1,:)=1;
 end
 
@@ -221,6 +233,11 @@ if check > 1
     swtch = 1;
 end
 
+% A list of L rates of particles exiting the process of interacting with a
+% cell (e.g. stage 1 to free, stage 2 to free, ..., phase L-1 to free, 
+% stage L to free). All stages with no recycling (necessarily including 
+% stage L) have rates of 0.
+rates_recycle = PARAMETERS.tstep_duration./PARAMETERS.EWTs_recycle;
 
 %%% INITIALISE VARIABLES, CONSTANTS & VISUAL %%%
 
@@ -248,9 +265,10 @@ cell_phases(1:N_tstep) = datasample(1:K, N_tstep);
 % (per column) of interaction with each cell (per row). The first column is
 % to simulate the number of particles hovering around one cell initially.
 cell_prtcls = zeros(total_sites, L+1);
-% Initialise array for recording the particles that transition each
+% Initialise arrays for recording the particles that transition each
 % timestep.
-successes_in_stage = zeros(total_sites, L);
+forward_in_stage = zeros(total_sites, L);
+recycles_in_stage = zeros(total_sites, L);
 
 % Initialise arrays/constants for EVOLUTION_INFO fields.
 cell_population = [N_tstep zeros(1,total_tsteps)];
@@ -322,7 +340,7 @@ while tstep < total_tsteps && ~all(tally_prtcls([end-1,end],tstep+1) == [...
         [~, indices] = intersect(cell_sites, prtcl_sites);
         cell_prtcls(indices,1) = cell_prtcls(indices,1) + 1;
     end
-    %cell_prtcls(:,1) = PARAMETERS.prtcls_per_site;
+    
     % We draw the number of free particles that hit a cell and attempt to
     % bind to it (i.e. that are available in stage 0 of the cell-particle
     % interaction model) from a Binomial distribution where the probability
@@ -358,22 +376,52 @@ while tstep < total_tsteps && ~all(tally_prtcls([end-1,end],tstep+1) == [...
         end
         % Due to wanting to keep the total number of particles allowed to
         % transition from a stage in one timestep static in spite of 
-        % successful transitions on the same timestep, save the number of 
-        % successes without yet updating the cell_prtcl array
-        successes_in_stage(1:N_tstep,stage) = binornd(cell_prtcls(1:N_tstep,...
+        % forward transitions and recycling on the same timestep, save the
+        % number of forward transitions and recycles without yet updating
+        % the cell_prtcl array
+        recycles_in_stage(1:N_tstep,stage) = binornd(cell_prtcls(1:N_tstep,...
+            stage), rates_recycle(stage));
+        if any(recycles_in_stage)
+            fprintf('r\n')
+        end
+        forward_in_stage(1:N_tstep,stage) = binornd(cell_prtcls(1:N_tstep,...
             stage), dynamic_prtcl_rates);
-        satisfy = (successes_in_stage(1:N_tstep,stage)+cell_prtcls(1:N_tstep,...
-            stage+1)>PARAMETERS.max_prtcls(stage));
-        if any(satisfy)
-            successes_in_stage(satisfy,stage)=PARAMETERS.max_prtcls(stage)-cell_prtcls(satisfy, stage+1);
+        transits_in_stage = forward_in_stage(1:N_tstep,stage) + ...
+            recycles_in_stage(1:N_tstep,stage);
+        too_low = (cell_prtcls(1:N_tstep,stage) - transits_in_stage) < 0;
+        too_high = (forward_in_stage(1:N_tstep,stage)+cell_prtcls(1:N_tstep,...
+                stage+1)>PARAMETERS.max_prtcls(stage));
+        % Choose whether to consider recylcing to the culture medium or 
+        % forward transitions throught the cell-particle interaction model 
+        % first.
+        if any(too_low)
+            transits_in_stage(too_low) = cell_prtcls(too_low,stage);
+            if rand < rates_recycle(stage)/(rates_recycle(stage)+dynamic_prtcl_rates)
+                % Treat recycling first
+                forward_in_stage(too_low,stage) = transits_in_stage(too_low) ...
+                    - recycles_in_stage(too_low,stage);
+                too_high = (forward_in_stage(1:N_tstep,stage)+cell_prtcls(1:N_tstep,...
+                    stage+1)>PARAMETERS.max_prtcls(stage));
+            else
+                % Treat forwards transitions first (this will automatically be
+                % the case if there is no recycling)
+                recycles_in_stage(too_low,stage) = transits_in_stage(too_low) ...
+                    - forward_in_stage(too_low,stage);
+            end
+        end
+        if any(too_high)
+            forward_in_stage(too_high,stage) = PARAMETERS.max_prtcls(stage) ...
+                - cell_prtcls(too_high, stage+1);
             count_catch = count_catch + 1;
         end
     end
     
     % Update the total/per cell number of particles in each stage of
     % the cell-particle interaction model
-    cell_prtcls(1:N_tstep,1:L) = cell_prtcls(1:N_tstep,1:L) - successes_in_stage(1:N_tstep,:);
-    cell_prtcls(1:N_tstep,2:L+1) = cell_prtcls(1:N_tstep,2:L+1) + successes_in_stage(1:N_tstep,:);
+    cell_prtcls(1:N_tstep,1:L) = cell_prtcls(1:N_tstep,1:L) - ...
+        forward_in_stage(1:N_tstep,:) - recycles_in_stage(1:N_tstep,:);
+    cell_prtcls(1:N_tstep,2:L+1) = cell_prtcls(1:N_tstep,2:L+1) + ...
+        forward_in_stage(1:N_tstep,:);
     
     % Update the total class of particles
     tally_prtcls(3,tstep+1) = sum(cell_prtcls(1:N_tstep,L+1)); % internalised

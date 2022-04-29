@@ -2,7 +2,7 @@
 % simulation with the specified parameters for a given number of iterations 
 % and produces summary statistics from the numerous runs.
 %
-%   This is the work of Celia Dowling 01/04/22
+%   This is the work of Celia Dowling 29/04/22
 %
 %   The input argument for cells_simulation.m is a structure PARAMETERS 
 %   which has the following fields that need to be defined by the user:
@@ -86,6 +86,18 @@
 %                                   the CDF of the hypo-exponential 
 %                                   distribution with these rates satisfy 
 %                                   F(24)=i.
+%       EWTs_recycle (hours)        Expected waiting time for one particle
+%                                   that is interacting with a cell to be
+%                                   recycled back into the culture medium.
+%                                   Typically particles in stages 1 (bound)
+%                                   and L-1 (just prior to internalisation)
+%                                   will have the opportunity to exit the
+%                                   process (unbind or be recycled before
+%                                   therapeutics are delivered). A particle 
+%                                   that is internalised (in stage L)
+%                                   cannot be recycled. If wanting to
+%                                   create this scenario, set all other
+%                                   waiting times to be infinity.
 %       max_prtcls                  The particle capacities of each of the
 %                                   L cell-particle interaction model
 %                                   stages (i.e., capacity of stage 1, ...,
@@ -214,7 +226,13 @@ set(0,'DefaultFigureWindowStyle','docked') % If the setting is 'docked', the fra
 num_runs = 200;
 
 % Choose number of hours after which to plot
-X = 4;
+X = 6;
+
+% Choose maximum number of cell divisions to plot
+max_divs = 3;
+
+% Choose to use and ananlyse data on every i(th) timestep
+ith = 6;
 
 % Choose a tolerance for gradient matching
 tol = 5E-4;
@@ -234,16 +252,17 @@ FLUORESC = struct( ...
 PARAMETERS = struct( ...
     'simulation_duration',24, ... (hours)
     'tstep_duration',1/6, ... (hours)
-    'initial_num_cells', 10, ... 
+    'initial_num_cells', 20, ... 
     'prtcls_per_site', 1000, ...
     'cell_diam', 25, ... (micrometers)
     'culture_dim', 10, ... (cell diameters)
     'culture_media_height', 5,...  (millimeters) 0.5
     'EWT_move', 1/6, ... (hours) 
-    'EWTs_proliferate', 1e10*[100], ... [4,4,4], ... [phase 1, ..., phase K](hours) 
+    'EWTs_proliferate', 24, ... [4,4,4], ... [phase 1, ..., phase K](hours) 
     'EWTs_internalise', struct('input_type', "fraction", ... "fraction" or "EWT" or "prob_and_rates"
-    'values', [0.02,24]), ...[0.02,0.01,0.005,24]),... [0.02,0.01,24]), ...[0.01,0.006,24]),... [0.2,0.1,24]), ...% see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
-    'max_prtcls', [40], ... [stage 1, ..., stage L]
+    'values', [0.02,0.01,24]), ...[0.02,0.01,0.005,24]),... [0.02,0.01,24]), ...[0.01,0.006,24]),... [0.2,0.1,24]), ...% see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
+    'EWTs_recycle', [20,inf],... (hours)
+    'max_prtcls', [inf,inf], ... [stage 1, ..., stage L]
     'prob_inherit', 0.7, ...     
     'temp', 36, ... (degrees celsius)    
     'viscos', 1.0005E-3,... (kiloggrams / (meter*second))      
@@ -274,7 +293,7 @@ end
 [it_is,rate_diffus] = is_l1_greater_than_rate_diffus(PARAMETERS);
 if it_is
     % Change the input parameters
-    fprintf("The input probability has been replaced with 1\n")
+    warning("The input probability of binding once hit has been replaced with 1")
     if PARAMETERS.EWTs_internalise.input_type == "EWT"
         % Cap the EWT of free to bound at the rate of hitting
         PARAMETERS.EWTs_internalise.values(:,1) = 1/rate_diffus; % hours
@@ -295,6 +314,11 @@ elseif PARAMETERS.EWTs_internalise.input_type == "prob_and_rates"
     L = length(PARAMETERS.EWTs_internalise.values);
 end
 
+% Check if the number of stages in the cell-particle interaction model are
+% consistent across all input
+assert(length(PARAMETERS.max_prtcls)==L && ...
+    length(PARAMETERS.EWTs_recycle)==L, ...
+    "The number of stages of cell-particle interaction are not consistent across all inputs")
 % Run multiple simulations and collect data
 total_tsteps = floor(PARAMETERS.simulation_duration/PARAMETERS.tstep_duration);
 total.cell_c_o_p = zeros(num_runs*PARAMETERS.culture_dim^2,total_tsteps+1,3);
@@ -323,23 +347,26 @@ for run = 1:num_runs
     runs.cell_pair_cor_coef(run,:) = EVOLUTION_INFO.cell_pair_cor_coef;
 end
 %%
-total.cell_c_o_p = total.cell_c_o_p(1:cell_end,:,:);
-total.cell_lineage = total.cell_lineage(1:cell_end,:);
+% Reduce the data used to being on every i(th) timestep
+total.cell_population = total.cell_population(1:ith:(total_tsteps+1));
+total.cell_c_o_p = total.cell_c_o_p(1:cell_end,1:ith:(total_tsteps+1),:);
+total.cell_lineage = total.cell_lineage(1:cell_end,[1,2,3:ith:(total_tsteps+3)]);
 total.confluence = total.cell_population/(PARAMETERS.culture_dim^2 * num_runs);
-binrng = 0:PARAMETERS.tstep_duration:PARAMETERS.simulation_duration; % Create bin ranges
-
+binrng = 0:ith*PARAMETERS.tstep_duration:PARAMETERS.simulation_duration; % Create bin ranges
 fprintf('\nThe average final population of cells in a run:')
 disp(total.cell_population(end)/num_runs)
 
 % Find the average pair correlation coefficient
-total.cell_pair_cor_coef = [mean(runs.cell_pair_cor_coef(:,:), 'all'),...
-    var(runs.cell_pair_cor_coef(:,:), 0, 'all')];
+total.cell_pair_cor_coef = [mean(runs.cell_pair_cor_coef(:,1:ith:(total_tsteps+1)), 'all'),...
+    var(runs.cell_pair_cor_coef(:,1:ith:(total_tsteps+1)), 0, 'all')];
+runs.cell_pair_cor_coef = runs.cell_pair_cor_coef(run,1:ith:(total_tsteps+1));
+%%
 fprintf("The mean and variance of the pair correlation coefficient in each run:")
 format SHORTE
 disp(total.cell_pair_cor_coef)
 
 % Plot associated Vs interacting+internalised cells over time
-means = zeros(3,total_tsteps+1);
+means = zeros(3,floor(total_tsteps/ith)+1);
 % Average number interacting particles per cell over all runs in a timestep
 means(1,:) = sum(total.cell_c_o_p(:,:,2),1)./total.cell_population; 
 % Average number internalised particles per cell over all runs in a timestep
@@ -348,9 +375,9 @@ means(2,:) = sum(total.cell_c_o_p(:,:,3),1)./total.cell_population;
 means(3,:) = means(1,:) + means(2,:);   
 
 % Calculate variances for each timestep
-variances = zeros(2,3,total_tsteps+1);
-total.cell_c_o_p_corrected = zeros(cell_end,total_tsteps+1,2);
-for tstep = 0:total_tsteps
+variances = zeros(2,3,floor(total_tsteps/ith)+1);
+total.cell_c_o_p_corrected = zeros(cell_end,floor(total_tsteps/ith)+1,2);
+for tstep = 0:floor(total_tsteps/ith)
     N_tstep = total.cell_population(tstep+1); 
     
     % Getting rid of the entries corresponding to cells that haven't been
@@ -400,7 +427,7 @@ close all
 % bound/internalised), secondary fluoerescence against primary
 % fluorescence, and deosages split by number of cell divisions after every X 
 % hours
-create_dosage_distribs(X, total_tsteps, PARAMETERS, total, FLUORESC);
+create_dosage_distribs(X, floor(total_tsteps/ith), PARAMETERS, total, FLUORESC, max_divs, ith);
 
 % Plot the mean Pair Correlation Coefficient over time (the mean PCC at
 % each timestep across all of the run PCCs and the variance in the mean)

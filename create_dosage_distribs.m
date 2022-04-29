@@ -1,9 +1,10 @@
-function create_dosage_distribs(X, total_tsteps, PARAMETERS, total, FLUORESC)
+function create_dosage_distribs(X, total_tsteps, PARAMETERS, total, FLUORESC, max_divs, ith)
 % CREATE_DOSAGE_DISTRIBS creates dosage distributions, fluorescence plots, 
 % and dosages split by number of cell divisions after every X hours.
 
 % Find the hours on which plots will be made
-Xhour_indices = 0:floor(X/PARAMETERS.tstep_duration):total_tsteps;
+increments = floor(X/(PARAMETERS.tstep_duration * ith));
+Xhour_indices = 0:increments:total_tsteps;
 Xhour_indices = Xhour_indices(2:end) + 1;
 dim1 = floor(sqrt(length(Xhour_indices)));
 dim2 = ceil(length(Xhour_indices)/dim1);
@@ -21,7 +22,7 @@ x_max = max(interact_max,internal_max);
 local_max = zeros(1,length(Xhour_indices));
 
 % Find the largest number of cell divisions to be included
-max_cell_divs = max(total.cell_lineage(:,3:end),[],'all');
+max_cell_divs = min(max(total.cell_lineage(:,3:end),[],'all'),max_divs);
 
 for index = 2:length(Xhour_indices)
     [cells_interact,~] = histcounts(Xhourly_total.cell_c_o_p(:,index,2));
@@ -74,7 +75,7 @@ for time_plot = 1:length(Xhour_indices)
     hold off;
     xlim([0,x_max]);
     %ylim([0,y_max]);
-    title(['At ' num2str(time_plot*X) ' hours']);
+    title(['At ' num2str(time_plot*X*ith) ' hours']);
     xlabel('Number of particles');
     ylabel('Cell frequency');
     pbaspect([1 1 1]);
@@ -116,6 +117,7 @@ for time_plot = 1:length(Xhour_indices)
     % ITERATING THROUGH THE DIVISION NUMBERS PRESENT AT THIS TIMESTEP
     rows = unique(total.cell_lineage(total.cell_lineage(:, ...
         Xth_hour_index)>0,Xth_hour_index+2))';
+    rows = rows(rows<=max_divs);
     for row = rows
         plot_num = (row-1)*length(Xhour_indices) + time_plot;
         subplot(max_cell_divs,length(Xhour_indices),plot_num);
@@ -140,7 +142,7 @@ for time_plot = 1:length(Xhour_indices)
         xlabel('Num. of particles', 'Interpreter', 'latex');
         ylabel('Cell frequ.', 'Interpreter', 'latex');
         if row == min_cell_divs_tstep
-            title(['At ' num2str(time_plot*X) ' hour/s']);
+            title(['At ' num2str(time_plot*X*ith) ' hour/s']);
             if time_plot == 1
                 legend
             end

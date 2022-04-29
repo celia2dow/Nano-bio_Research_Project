@@ -9,10 +9,10 @@ if L == 1
     % Assume that new internalisations are the product of the number of
     % free particles available multiplied by the exponential distribution
     % evaluated at the length of a timestep.
-    new_interns_CC(1) = PARAMETERS.prtcls_per_site .* expCDF(lam,0);
+    new_interns_CC(1) = PARAMETERS.prtcls_per_site .* expCDF(lam(1),0);
     intern_CC(1) = new_interns_CC(1);
     for i = 2:length(times)
-        l1_dyn = lam*(1-intern_CC(i-1)/CC);
+        l1_dyn = lam(i)*(1-intern_CC(i-1)/CC);
         freePrtcls = PARAMETERS.prtcls_per_site - intern_CC(i-1);
         new_interns_CC(i) = expCDF(l1_dyn.*total.confluence(i),times(2)) ...
             .* freePrtcls ./total.confluence(i);
@@ -24,10 +24,10 @@ elseif L == 2
     % hypoexponential distirbution, hypoCDF, scaled by the remaining dosage) 
     % and from bound (described by the exponential distribution, expCDF, scaled
     % by the number bound).
-    new_interns_CC(1) = PARAMETERS.prtcls_per_site .* hypoCDF(lam,0);
+    new_interns_CC(1) = PARAMETERS.prtcls_per_site .* hypoCDF(lam(1),0);
     intern_CC(1) = new_interns_CC(1);
     for i = 2:length(times)
-        l2_dyn = lam*(1-intern_CC(i-1)/CC);
+        l2_dyn = lam(i)*(1-intern_CC(i-1)/CC);
         freePrtcls = PARAMETERS.prtcls_per_site - assocPrtcls(i-1);
         boundPrtcls = assocPrtcls(i-1)- intern_CC(i-1);
         new_interns_CC(i) = hypoCDF(l2_dyn,times(2)) .* freePrtcls +...

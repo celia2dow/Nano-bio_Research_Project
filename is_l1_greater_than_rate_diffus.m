@@ -50,7 +50,7 @@ end
 % CHECK IF L1 IS LARGER THAN RATE_DIFFUS
 if l1 > rate_diffus
     check = 1;
-    fprintf("\nERROR: the input probability of binding once hit is >1\n")
+    warning("The input probability of binding once hit is >1")
 else
     check = 0;
 end

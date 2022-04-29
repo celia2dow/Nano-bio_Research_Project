@@ -49,10 +49,10 @@ if PARAMETERS.max_prtcls(end) ~= inf
     set(fig29, 'Visible', 'off');
     if L==1
         % MLE Poisson method
-        plot(binrng(1:end-1),est_CC.using_mean_mean, 'r--', 'LineWidth', 1.5)
+        plot(binrng(1:end-1),est_CC.using_mean, 'r--', 'LineWidth', 1.5)
         hold on
-        plot(binrng(1:end-1),est_CCUP.using_mean_mean, 'r:')
-        plot(binrng(1:end-1),est_CCLO.using_mean_mean, 'r:')
+        plot(binrng(1:end-1),est_CCUP.using_mean, 'r:')
+        plot(binrng(1:end-1),est_CCLO.using_mean, 'r:')
         hold off
     elseif L==2
         % Differences method
@@ -116,10 +116,12 @@ end
 if total.cell_population(end) ~= total.cell_population(1)
     EWT_prolif = sum(PARAMETERS.EWTs_proliferate);
     % Using exponential growth formula
-    proliferations = total.cell_population(1) .* 2 .^ ...
-        ([binrng,binrng(end)+PARAMETERS.tstep_duration] ./ EWT_prolif);
+    proliferations = total.cell_population(1) .* (exp ...
+        ([binrng,binrng(end)+PARAMETERS.tstep_duration*ith] ./ EWT_prolif));
     scaling = proliferations(1:end-1)./proliferations(2:end);
     lam1 = lam1 .* scaling;
+    lam1UP = lam1UP .* scaling;
+    lam1LO = lam1LO .* scaling;
 end
 
 % If there are no proliferation events
@@ -201,7 +203,7 @@ if total.cell_population(1)==total.cell_population(end)
 % If there are proliferation events
 else
     % Association curves: mean, lower, upper
-    fprintf("\nWARNING confluence not accounted for in estimates\n")
+    warning("Confluence not accounted for in estimates")
     assoc = PARAMETERS.prtcls_per_site .* CDF.exp(lam1,binrng);
     assocLO = PARAMETERS.prtcls_per_site .* CDF.exp(lam1LO,binrng);
     assocUP = PARAMETERS.prtcls_per_site .* CDF.exp(lam1UP,binrng);
@@ -320,11 +322,12 @@ pbaspect([1 1 1])
 fig31 = figure(31);
 set(fig31, 'Visible', 'off');
 max_cell_divs = max(total.cell_lineage(:,3:end),[],'all');
-store_means = zeros(max_cell_divs,total_tsteps+1,3);
-store_stddev = zeros(max_cell_divs,total_tsteps+1,3);
-% Iterate through cell divisions
-for num_divs = 1:max(total.cell_lineage(:,tstep+2)) 
-    for tstep = 1:total_tsteps+1 
+store_means = zeros(max_cell_divs,floor(total_tsteps/ith)+1,3);
+store_stddev = zeros(max_cell_divs,floor(total_tsteps/ith)+1,3);
+% Iterate through cell divisions provided they are less than the desired
+% upper limit of divisions
+for num_divs = 1:min(max(total.cell_lineage(:,tstep+2)),max_divs)
+    for tstep = 1:floor(total_tsteps/ith)+1 
         cells_concerned = total.cell_lineage(total.cell_lineage(:,tstep+2)==num_divs,2);
         if cells_concerned
             interacting_at_tstep = mean(total.cell_c_o_p(cells_concerned,tstep,2));

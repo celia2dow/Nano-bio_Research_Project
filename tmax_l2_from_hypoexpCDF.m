@@ -1,5 +1,5 @@
 function [tmax_noCC, l2_mean, l2_array] = tmax_l2_from_hypoexpCDF(times,...
-    hypoCDF,av_data,PARAMETERS,guess,tol_l2)
+    hypoCDF,av_data,PARAMETERS,guess,tol_l2,ith)
 % TMAX_L2_FROM_HYPOEXPOCDF estimates lambda2 by equating the data (av_data)
 % on average numbers of particles internalised over the initial dosage of 
 % particles per cell (PARAMETERS.prtcls_per_cell) to the hypoexponential CDF
@@ -36,6 +36,6 @@ tmax_noCC = tmax_from_hypoexpCDF(PARAMETERS,l2_array,tol_l2,times);
 % CALCULATE L2_MEAN
 %l2_mean=mean(l2_array(int64(1/PARAMETERS.tstep_duration + 1):...
 %    int64(tmax_noCC/PARAMETERS.tstep_duration + 1))); % non weighted
-l2_mean=w8mean(l2_array(1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1)),...
-    av_data(3,1:int64(tmax_noCC/PARAMETERS.tstep_duration + 1))); % weighted
+l2_mean=w8mean(l2_array(1:int64(tmax_noCC/(PARAMETERS.tstep_duration*ith) + 1)),...
+    av_data(3,1:int64(tmax_noCC/(PARAMETERS.tstep_duration*ith) + 1))); % weighted
 end
