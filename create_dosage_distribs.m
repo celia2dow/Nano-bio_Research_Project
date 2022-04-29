@@ -24,7 +24,7 @@ local_max = zeros(1,length(Xhour_indices));
 % Find the largest number of cell divisions to be included
 max_cell_divs = min(max(total.cell_lineage(:,3:end),[],'all'),max_divs);
 
-for index = 2:length(Xhour_indices)
+for index = Xhour_indices(1:end-1)
     [cells_interact,~] = histcounts(Xhourly_total.cell_c_o_p(:,index,2));
     [cells_internal,~] = histcounts(Xhourly_total.cell_c_o_p(:,index,3));
     if ~isempty(cells_interact) && ~isempty(cells_internal)
@@ -75,7 +75,7 @@ for time_plot = 1:length(Xhour_indices)
     hold off;
     xlim([0,x_max]);
     %ylim([0,y_max]);
-    title(['At ' num2str(time_plot*X*ith) ' hours']);
+    title(['At ' num2str(time_plot*X) ' hour/s']);
     xlabel('Number of particles');
     ylabel('Cell frequency');
     pbaspect([1 1 1]);
@@ -113,16 +113,16 @@ for time_plot = 1:length(Xhour_indices)
     set(0,'CurrentFigure',fig9)
     max_cell_divs_tstep = max(total.cell_lineage(:,Xth_hour_index+2));
     min_cell_divs_tstep = min(total.cell_lineage(total.cell_lineage(:,...
-        Xth_hour_index)>0,Xth_hour_index+2));
+        Xth_hour_index+2)>0,Xth_hour_index+2));
     % ITERATING THROUGH THE DIVISION NUMBERS PRESENT AT THIS TIMESTEP
     rows = unique(total.cell_lineage(total.cell_lineage(:, ...
-        Xth_hour_index)>0,Xth_hour_index+2))';
+        Xth_hour_index+2)>0,Xth_hour_index+2))';
     rows = rows(rows<=max_divs);
     for row = rows
         plot_num = (row-1)*length(Xhour_indices) + time_plot;
         subplot(max_cell_divs,length(Xhour_indices),plot_num);
         cells_with_divs = total.cell_lineage(total.cell_lineage(:,...
-            Xth_hour_index)==row,2);
+            Xth_hour_index+2)==row,2);
         if any(Xhourly_total.cell_c_o_p(:,:,2),'all')
             % INTERACTING PARTICLE DISTRIBUTIONS IN CELLS HAVING DIVIDED THIS
             % MANY TIMES
@@ -142,7 +142,7 @@ for time_plot = 1:length(Xhour_indices)
         xlabel('Num. of particles', 'Interpreter', 'latex');
         ylabel('Cell frequ.', 'Interpreter', 'latex');
         if row == min_cell_divs_tstep
-            title(['At ' num2str(time_plot*X*ith) ' hour/s']);
+            title(['At ' num2str(time_plot*X) ' hour/s']);
             if time_plot == 1
                 legend
             end

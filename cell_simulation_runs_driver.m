@@ -225,18 +225,6 @@ set(0,'DefaultFigureWindowStyle','docked') % If the setting is 'docked', the fra
 % Choose number of runs
 num_runs = 200;
 
-% Choose number of hours after which to plot
-X = 6;
-
-% Choose maximum number of cell divisions to plot
-max_divs = 3;
-
-% Choose to use and ananlyse data on every i(th) timestep
-ith = 6;
-
-% Choose a tolerance for gradient matching
-tol = 5E-4;
-
 % Parameters relating to the fluorescent intensity dot plot
 FLUORESC = struct( ...
     'stain1_part', 1000, ... Without intensity transformations = 1
@@ -289,6 +277,17 @@ if ~exist(PARAMETERS.folder_path, 'dir')
     mkdir(PARAMETERS.folder_path)
 end
 
+% Choose number of hours after which to plot
+X = 6;
+% Choose to use and ananlyse data on every i(th) timestep (or after every Y
+% hours)
+Y = 6; % hours
+ith = Y/PARAMETERS.tstep_duration; % timesteps
+% Choose a tolerance for gradient matching
+tol = 5E-4;
+% Choose maximum number of cell divisions to plot
+max_divs = 3;
+
 % Check if the input parameters for internalisation are inappropriate
 [it_is,rate_diffus] = is_l1_greater_than_rate_diffus(PARAMETERS);
 if it_is
@@ -318,7 +317,14 @@ end
 % consistent across all input
 assert(length(PARAMETERS.max_prtcls)==L && ...
     length(PARAMETERS.EWTs_recycle)==L, ...
-    "The number of stages of cell-particle interaction are not consistent across all inputs")
+    ['The number of stages of cell-particle interaction are not consistent ' ...
+    'across all inputs (max_prtcls, EWTs_recylce, EWTs_internalise)'])
+
+% Check if the number of hours between plots is greater than the number of
+% hours between data points that are to be used.
+assert(mod(X,Y)==0, ['The number of hours between plots (X) must be a natural multiple' ...
+    ' of the number of hours between used data points (Y)'])
+
 % Run multiple simulations and collect data
 total_tsteps = floor(PARAMETERS.simulation_duration/PARAMETERS.tstep_duration);
 total.cell_c_o_p = zeros(num_runs*PARAMETERS.culture_dim^2,total_tsteps+1,3);
