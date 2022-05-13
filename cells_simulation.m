@@ -3,7 +3,7 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 % in a 2.D cell monolayer within a culture dish as they interact with and
 % internalised particles.
 %
-%   This is the work of Celia Dowling 01/04/22
+%   This is the work of Celia Dowling 29/04/22
 %
 %   The input argument is a structure PARAMETERS containing the fields:
 %

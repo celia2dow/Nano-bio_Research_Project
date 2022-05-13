@@ -24,7 +24,7 @@ local_max = zeros(1,length(Xhour_indices));
 % Find the largest number of cell divisions to be included
 max_cell_divs = min(max(total.cell_lineage(:,3:end),[],'all'),max_divs);
 
-for index = Xhour_indices(1:end-1)
+for index = 1:length(Xhour_indices)
     [cells_interact,~] = histcounts(Xhourly_total.cell_c_o_p(:,index,2));
     [cells_internal,~] = histcounts(Xhourly_total.cell_c_o_p(:,index,3));
     if ~isempty(cells_interact) && ~isempty(cells_internal)

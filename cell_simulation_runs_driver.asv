@@ -222,6 +222,9 @@ set(0,'DefaultFigureWindowStyle','docked') % If the setting is 'docked', the fra
 % Seed for efficiency purposes (optional)
 %rng(22)
 
+% Choose number of runs
+num_runs = 200;
+
 % Parameters relating to the fluorescent intensity dot plot
 FLUORESC = struct( ...
     'stain1_part', 1000, ... Without intensity transformations = 1
@@ -245,9 +248,9 @@ PARAMETERS = struct( ...
     'EWT_move', 1/6, ... (hours) 
     'EWTs_proliferate', 24, ... [4,4,4], ... [phase 1, ..., phase K](hours) 
     'EWTs_internalise', struct('input_type', "fraction", ... "fraction" or "EWT" or "prob_and_rates"
-    'values', [0.02,0.01,24]), ...[0.02,0.01,0.005,24]),... [0.02,0.01,24]), ...[0.01,0.006,24]),... [0.2,0.1,24]), ...% see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
-    'EWTs_recycle', [20,inf],... (hours)
-    'max_prtcls', [inf,inf], ... [stage 1, ..., stage L]
+    'values', [0.01,24]), ...[0.02,0.01,0.005,24]),... [0.02,0.01,24]), ...[0.01,0.006,24]),... [0.2,0.1,24]), ...% see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
+    'EWTs_recycle', [inf],... (hours)
+    'max_prtcls', [inf], ... [stage 1, ..., stage L]
     'prob_inherit', 0.7, ...     
     'temp', 36, ... (degrees celsius)    
     'viscos', 1.0005E-3,... (kiloggrams / (meter*second))      
@@ -274,18 +277,16 @@ if ~exist(PARAMETERS.folder_path, 'dir')
     mkdir(PARAMETERS.folder_path)
 end
 
-% Choose number of runs
-num_runs = 200;
 % Choose number of hours after which to plot
 X = 6;
-% Choose maximum number of cell divisions to plot
-max_divs = 3;
 % Choose to use and ananlyse data on every i(th) timestep (or after every Y
 % hours)
-Y = 1; % hours
+Y = 1/6; % hours
 ith = Y/PARAMETERS.tstep_duration; % timesteps
 % Choose a tolerance for gradient matching
 tol = 5E-4;
+% Choose maximum number of cell divisions to plot
+max_divs = 3;
 
 % Check if the input parameters for internalisation are inappropriate
 [it_is,rate_diffus] = is_l1_greater_than_rate_diffus(PARAMETERS);
@@ -316,13 +317,13 @@ end
 % consistent across all input
 assert(length(PARAMETERS.max_prtcls)==L && ...
     length(PARAMETERS.EWTs_recycle)==L, ...
-    ["The number of stages of cell-particle interaction are not consistent " +...
-    "across all inputs"])
+    ['The number of stages of cell-particle interaction are not consistent ' ...
+    'across all inputs (max_prtcls, EWTs_recylce, EWTs_internalise)'])
 
 % Check if the number of hours between plots is greater than the number of
 % hours between data points that are to be used.
-assert(X>Y, ["The number of hours between plots must be greater than or equal" ...
-    " to the number of hours between used data points"])
+assert(mod(X,Y)==0, ['The number of hours between plots (X) must be a natural multiple' ...
+    ' of the number of hours between used data points (Y)'])
 
 % Run multiple simulations and collect data
 total_tsteps = floor(PARAMETERS.simulation_duration/PARAMETERS.tstep_duration);

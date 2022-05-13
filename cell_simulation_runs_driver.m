@@ -248,9 +248,9 @@ PARAMETERS = struct( ...
     'EWT_move', 1/6, ... (hours) 
     'EWTs_proliferate', 24, ... [4,4,4], ... [phase 1, ..., phase K](hours) 
     'EWTs_internalise', struct('input_type', "fraction", ... "fraction" or "EWT" or "prob_and_rates"
-    'values', [0.02,0.01,24]), ...[0.02,0.01,0.005,24]),... [0.02,0.01,24]), ...[0.01,0.006,24]),... [0.2,0.1,24]), ...% see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
-    'EWTs_recycle', [20,inf],... (hours)
-    'max_prtcls', [inf,inf], ... [stage 1, ..., stage L]
+    'values', [0.01,24]), ...[0.02,0.01,0.005,24]),... [0.02,0.01,24]), ...[0.01,0.006,24]),... [0.2,0.1,24]), ...% see notes on EWTs_internalise [26.19256, 5.36034], ...[34.62471997,12.52770188], ... 
+    'EWTs_recycle', [inf],... (hours)
+    'max_prtcls', [inf], ... [stage 1, ..., stage L]
     'prob_inherit', 0.7, ...     
     'temp', 36, ... (degrees celsius)    
     'viscos', 1.0005E-3,... (kiloggrams / (meter*second))      
@@ -281,7 +281,7 @@ end
 X = 6;
 % Choose to use and ananlyse data on every i(th) timestep (or after every Y
 % hours)
-Y = 6; % hours
+Y = 1/6; % hours
 ith = Y/PARAMETERS.tstep_duration; % timesteps
 % Choose a tolerance for gradient matching
 tol = 5E-4;
