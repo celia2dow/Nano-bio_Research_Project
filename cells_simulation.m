@@ -3,7 +3,7 @@ function EVOLUTION_INFO = cells_simulation(PARAMETERS)
 % in a 2.D cell monolayer within a culture dish as they interact with and
 % internalised particles.
 %
-%   This is the work of Celia Dowling 29/04/22
+%   This is the work of Celia Dowling 20/05/22
 %
 %   The input argument is a structure PARAMETERS containing the fields:
 %
@@ -494,8 +494,7 @@ while tstep < total_tsteps && ~all(tally_prtcls([end-1,end],tstep+1) == [...
                     parent_cell_num = find(cell_sites == parent_site);
                     gen_num = cell_lineage_history(cell_lineage_history(:,2) == parent_cell_num, lineage_colmn) + 1;
                     cell_lineage_history(N_tstep,1:2) = [parent_cell_num, N_tstep];
-                    cell_lineage_history(parent_cell_num,lineage_colmn) = gen_num;   
-                    cell_lineage_history(N_tstep,lineage_colmn) = 1; 
+                    cell_lineage_history([parent_cell_num, N_tstep],lineage_colmn) = gen_num;
                     
                     % The inheritance of internalised/ interacting
                     % nanoparticles from a cell with n_int nanoparticles 

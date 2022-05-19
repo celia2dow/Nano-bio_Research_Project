@@ -2,7 +2,7 @@
 % simulation with the specified parameters for a given number of iterations 
 % and produces summary statistics from the numerous runs.
 %
-%   This is the work of Celia Dowling 29/04/22
+%   This is the work of Celia Dowling 20/05/22
 %
 %   The input argument for cells_simulation.m is a structure PARAMETERS 
 %   which has the following fields that need to be defined by the user:
